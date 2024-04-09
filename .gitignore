@@ -4,5 +4,8 @@ output/
 .vscode/
 .idea/
 data.pickle
+data_2.pickle
 test.onnx
 async/
+**__pycache__**
+engines/*

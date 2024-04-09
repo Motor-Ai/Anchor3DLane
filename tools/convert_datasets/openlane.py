@@ -441,13 +441,15 @@ if __name__ == '__main__':
         merge_annotations(os.path.join(args.data_root, 'lane3d_1000', 'training'), os.path.join(args.data_root, 'data_splits', 'training.json'))
         merge_annotations(os.path.join(args.data_root, 'lane3d_1000', 'validation'), os.path.join(args.data_root, 'data_splits', 'validation.json'))
     elif args.generate:
-        # ori_json = os.path.join(args.data_root, 'data_splits', 'training.json')
-        # tar_path = os.path.join(args.data_root, 'cache_dense')
+        ori_json = os.path.join(args.data_root, 'data_splits', 'training.json')
+        tar_path = os.path.join(args.data_root, 'cache_dense')
         data_list_path = os.path.join(args.data_root, 'data_lists')
         os.makedirs(data_list_path, exist_ok=True)
-        # extract_data_with_smoothing(args.data_root, ori_json, tar_path=tar_path, test_mode=False)
-        # generate_datalist(os.path.join(tar_path, 'training'), os.path.join(data_list_path, 'training.txt'))
-        ori_json = os.path.join(args.data_root, 'data_splits', 'validation.json')
-        tar_path = os.path.join(args.data_root, 'cache_dense')
-        extract_data_with_smoothing(args.data_root, ori_json, tar_path=tar_path, test_mode=True)
-        generate_datalist(os.path.join(tar_path, 'validation'), os.path.join(data_list_path, 'validation.txt'))
+        
+        extract_data_with_smoothing(args.data_root, ori_json, tar_path=tar_path, test_mode=False)
+        generate_datalist(os.path.join(tar_path, 'training'), os.path.join(data_list_path, 'training.txt'))
+        # ori_json = os.path.join(args.data_root, 'data_splits', 'validation.json')
+        # tar_path = os.path.join(args.data_root, 'cache_dense')
+        
+        # extract_data_with_smoothing(args.data_root, ori_json, tar_path=tar_path, test_mode=True)
+        # generate_datalist(os.path.join(tar_path, 'validation'), os.path.join(data_list_path, 'validation.txt'))
