@@ -54,7 +54,9 @@ class ONNXRuntimeSegmentor(BaseSegmentor):
         for name in self.output_names:
             self.io_binding.bind_output(name)
         self.cfg = cfg
-        self.test_mode = cfg.model.test_cfg.mode
+        # self.test_mode = cfg.model.test_cfg.mode
+        self.test_mode = True
+        
         self.is_cuda_available = is_cuda_available
 
     def extract_feat(self, imgs):
@@ -262,8 +264,8 @@ def main():
     elif args.backend == 'tensorrt':
         model = TensorRTSegmentor(args.model, cfg=cfg, device_id=0)
 
-    model.CLASSES = dataset.CLASSES
-    model.PALETTE = dataset.PALETTE
+    # model.CLASSES = dataset.CLASSES
+    # model.PALETTE = dataset.PALETTE
 
     # clean gpu memory when starting a new evaluation.
     torch.cuda.empty_cache()

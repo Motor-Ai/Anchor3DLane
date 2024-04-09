@@ -18,12 +18,6 @@ class HostDeviceMem(object):
     def __repr__(self):
         return self.__str__()
     
-class MyLogger(trt.ILogger):
-    def __init__(self):
-       trt.ILogger.__init__(self)
-
-    def log(self, severity, msg):
-        pass # Your custom logging implementation here
 
 class TrtModel:
     
