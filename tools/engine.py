@@ -29,6 +29,6 @@ def build_engine(onnx_model_path: str, trt_engine_path: str, trt_logger_enable=T
     
 
 if __name__ == "__main__":
-    onnx_path = "test.onnx"
-    trt_path = "test.plan"
+    onnx_path = "engines/test.onnx"
+    trt_path = "engines/test.plan"
     build_engine(onnx_path, trt_path, False)
