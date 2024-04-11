@@ -4,6 +4,7 @@ import os
 import time
 from PIL import Image
 import cv2
+import json
 
 import pycuda.driver as cuda
 import pycuda.autoinit
@@ -79,29 +80,45 @@ class TrtModel:
         self.stream.synchronize()
         return [out.host.reshape(batch_size, -1) for out in self.outputs]
 
-
+def load_annotation(path):
+    with open('test.json') as f:
+        d = json.load(f)
+    return d
 
 def resize_image(img_arr, shape):
     w, h = shape[2], shape[3]
     resized_img = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
-
     return np.transpose(resized_img)/255.0
+
+def convert3d_to_2dimage(anno):
+    en = np.vstack(anno['extrinsic'])
+    in_ = np.vstack(anno['intrinsic'])
+    xyz = np.vstack(anno['lane_lines'][0]['xyz'])
+    ones = np.ones((1, len(xyz[0])))
+    point_3d_homo = np.concatenate((xyz, ones), axis=0)
+    projection_matrix = np.dot(in_, en[:3])
+    point_2d_homogeneous = np.dot(projection_matrix, point_3d_homo)
+    point_2d = (point_2d_homogeneous[:2] / point_2d_homogeneous[2])
+
+    return point_2d
 
 if __name__ == "__main__":
     img_path = "test.jpg"
+    anno_path = "test.json"
+
     image = cv2.imread(img_path)
+    anno = load_annotation(anno_path)
+    print(anno)
+    # batch_size = 1
+    # trt_engine_path = os.path.join("test.plan")
+    # model = TrtModel(trt_engine_path)
     
-    batch_size = 1
-    trt_engine_path = os.path.join("test.plan")
-    model = TrtModel(trt_engine_path)
-    
-    shape = model.engine.get_tensor_shape("input")
-    start = time.time()
+    # shape = model.engine.get_tensor_shape("input")
+    # start = time.time()
 
-    resized_img = resize_image(image, shape)
+    # resized_img = resize_image(image, shape)
 
-    result = model(resized_img, batch_size)
-    result = result[0].reshape(1, -1, 86)
+    # result = model(resized_img, batch_size)
+    # result = result[0].reshape(1, -1, 86)
 
-    end = time.time()
-
+    # end = time.time()
