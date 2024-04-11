@@ -146,7 +146,19 @@ def train(model,
     # The specific dataloader settings
     train_loader_cfg = {**loader_cfg, **cfg.data.get('train_dataloader', {})}
     data_loaders = [build_dataloader(dataset, **train_loader_cfg) for dataset in datasets]
+    
+    # save dataloader file for onnx:
+    data_sample = next(iter(data_loaders[0]))
+    for i in data_sample:
+        try:
+            data_sample[i] = data_sample[i].data[0]
+        except:
+            print()
 
+    import pickle 
+    with open('data.pickle', 'wb') as handle:
+        pickle.dump(data_sample, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        
     # put model on devices
     if distributed:
         find_unused_parameters = cfg.get('find_unused_parameters', False)
