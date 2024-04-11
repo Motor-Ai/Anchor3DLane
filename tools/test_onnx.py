@@ -157,7 +157,7 @@ def main():
     data_loaders = build_dataloader(dataset, **train_loader_cfg)
     input_ = next(iter(data_loaders))
     import pickle 
-    with open('data.pickle', 'rb') as handle:
+    with open('data/data.pickle', 'rb') as handle:
         data = pickle.load(handle)
     for i in range(len(data['img_metas']['ori_shape'])):
         data['img_metas']['ori_shape'][i] = data['img_metas']['ori_shape'][i].cpu()

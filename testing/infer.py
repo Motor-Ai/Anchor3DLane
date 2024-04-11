@@ -1,4 +1,5 @@
 import tensorrt as trt
+from tensorrt import TensorIOMode
 import numpy as np
 import os
 import time
@@ -21,7 +22,7 @@ class HostDeviceMem(object):
 
 class TrtModel:
     
-    def __init__(self,engine_path,max_batch_size=1,dtype=np.float32):
+    def __init__(self,engine_path, max_batch_size=1, dtype=np.float32):
         
         self.engine_path = engine_path
         self.dtype = dtype
@@ -31,6 +32,8 @@ class TrtModel:
         self.max_batch_size = max_batch_size
         self.inputs, self.outputs, self.bindings, self.stream = self.allocate_buffers()
         self.context = self.engine.create_execution_context()
+
+        print("max batch size:: {}".format(self.max_batch_size))
 
     @staticmethod
     def load_engine(trt_runtime, engine_path):
@@ -55,7 +58,9 @@ class TrtModel:
             
             bindings.append(int(device_mem))
 
-            if self.engine.get_tensor_mode(binding):
+            print(self.engine.get_tensor_mode(binding))
+
+            if self.engine.binding_is_input(binding):
                 inputs.append(HostDeviceMem(host_mem, device_mem))
             else:
                 outputs.append(HostDeviceMem(host_mem, device_mem))
@@ -63,11 +68,11 @@ class TrtModel:
         return inputs, outputs, bindings, stream
        
             
-    def __call__(self,x:np.ndarray,batch_size=1):
+    def __call__(self, x:np.ndarray, batch_size=1):
         
         x = x.astype(self.dtype)
         
-        np.copyto(self.inputs[0].host,x.ravel())
+        np.copyto(self.inputs[0].host, x.ravel())
         
         for inp in self.inputs:
             cuda.memcpy_htod_async(inp.device, inp.host, self.stream)
@@ -77,37 +82,48 @@ class TrtModel:
             cuda.memcpy_dtoh_async(out.host, out.device, self.stream) 
             
         self.stream.synchronize()
-        return [out.host.reshape(batch_size,-1) for out in self.outputs]
 
+        return [out.host.reshape(batch_size, -1) for out in self.outputs]
 
-# def load_image(path):
-#     input_image = np.array(Image.open(path))
-#     return input_image
-    
-
-def resize_image(img_arr, shape):
+def resize_image(imgage, shape):
     w, h = shape[2], shape[3]
-    cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
-    pass
+    resized_image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
+    
+    return np.array(resized_image)
 
 if __name__ == "__main__":
-    img_path = "test.jpg"
+    img_path = "/home/ubuntu/workstation/Anchor3DLane/data/OpenLane/images/training/segment-268278198029493143_1400_000_1420_000_with_camera_labels/155815122108723600.jpg"
     image = cv2.imread(img_path)
     
-    # img_arr = resize_image(img_arr)
+    image_array = []
 
     batch_size = 1
-    trt_engine_path = os.path.join("test.plan")
+    trt_engine_path = os.path.join("engines/lane_single_batch.plan")
     model = TrtModel(trt_engine_path)
     
     shape = model.engine.get_tensor_shape("input")
+    output_shape = model.engine.get_tensor_shape("output")
+    print("output shape of the network:: {}".format(output_shape))
+
     start = time.time()
 
-    resized_img = resize_image(image, shape)
-    data = np.random.randint(0,255,(1, 3, 360, 480))/255
+    resized_img = resize_image(image, shape).reshape((shape[1], shape[2], shape[3]))
 
-    result = model(data, batch_size)
-    print(result)
+    for i in range(batch_size):
+        image_array.append(resized_img)
+    
+    image_array = np.array(image_array) / 255.
+
+    # data = np.random.randint(0, 255,(16, 3, 360, 480))/255
+    # print(image_array.shape)
+    # data = np.random.randint(0, 255, (batch_size, *shape[1:]))/255
+
+    result = model(image_array, batch_size)
+    
+    # seg_pred shape -> 1, 4431, 86
+    seg_pred = result[0].reshape((batch_size, output_shape[1], output_shape[2]))
+    print(seg_pred)
+    
     end = time.time()
     
     print("*" * 100)

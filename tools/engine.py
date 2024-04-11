@@ -13,6 +13,7 @@ def build_engine(onnx_model_path: str, trt_engine_path: str, trt_logger_enable=T
     TRT_LOGGER = trt.Logger()
     builder = trt.Builder(TRT_LOGGER)
     EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    # print(EXPLICIT_BATCH)
     network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
 
     parser = trt.OnnxParser(network, TRT_LOGGER)
@@ -29,6 +30,6 @@ def build_engine(onnx_model_path: str, trt_engine_path: str, trt_logger_enable=T
     
 
 if __name__ == "__main__":
-    onnx_path = "engines/test.onnx"
-    trt_path = "engines/test.plan"
+    onnx_path = "engines/nms_single_test.onnx"
+    trt_path = "engines/nms_single_test.plan"
     build_engine(onnx_path, trt_path, False)
