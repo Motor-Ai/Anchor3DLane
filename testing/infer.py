@@ -54,16 +54,15 @@ class TrtModel:
             device_mem = cuda.mem_alloc(host_mem.nbytes)
             
             bindings.append(int(device_mem))
-
-            if self.engine.get_tensor_mode(binding):
+            
+            if self.engine.get_tensor_mode(binding) == trt.TensorIOMode.INPUT:
                 inputs.append(HostDeviceMem(host_mem, device_mem))
-            else:
+            elif self.engine.get_tensor_mode(binding) == trt.TensorIOMode.OUTPUT:
                 outputs.append(HostDeviceMem(host_mem, device_mem))
-        
         return inputs, outputs, bindings, stream
        
             
-    def __call__(self,x:np.ndarray,batch_size=1):
+    def __call__(self,x:np.ndarray, batch_size=1):
         
         x = x.astype(self.dtype)
         
@@ -73,29 +72,25 @@ class TrtModel:
             cuda.memcpy_htod_async(inp.device, inp.host, self.stream)
         
         self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
+
         for out in self.outputs:
             cuda.memcpy_dtoh_async(out.host, out.device, self.stream) 
             
         self.stream.synchronize()
-        return [out.host.reshape(batch_size,-1) for out in self.outputs]
+        return [out.host.reshape(batch_size, -1) for out in self.outputs]
 
 
-# def load_image(path):
-#     input_image = np.array(Image.open(path))
-#     return input_image
-    
 
 def resize_image(img_arr, shape):
     w, h = shape[2], shape[3]
-    cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
-    pass
+    resized_img = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
+
+    return np.transpose(resized_img)/255.0
 
 if __name__ == "__main__":
     img_path = "test.jpg"
     image = cv2.imread(img_path)
     
-    # img_arr = resize_image(img_arr)
-
     batch_size = 1
     trt_engine_path = os.path.join("test.plan")
     model = TrtModel(trt_engine_path)
@@ -104,12 +99,9 @@ if __name__ == "__main__":
     start = time.time()
 
     resized_img = resize_image(image, shape)
-    data = np.random.randint(0,255,(1, 3, 360, 480))/255
 
-    result = model(data, batch_size)
-    print(result)
+    result = model(resized_img, batch_size)
+    result = result[0].reshape(1, -1, 86)
+
     end = time.time()
-    
-    print("*" * 100)
-    print(f"The execution took {(end-start)}.")
-    print("*" * 100)
+
