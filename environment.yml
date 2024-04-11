@@ -184,9 +184,6 @@ dependencies:
     - tensorflow-io-gcs-filesystem==0.36.0
     - termcolor==2.4.0
     - tomli==2.0.1
-    - torch==1.13.1+cu117
-    - torchaudio==0.13.1+cu117
-    - torchvision==0.14.1+cu117
     - tqdm==4.65.2
     - triton==2.0.0
     - typing-extensions==4.5.0
