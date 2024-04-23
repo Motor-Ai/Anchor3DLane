@@ -386,8 +386,8 @@ class Anchor3DLane(BaseModule):
         output['proposals_list'] = proposals_list
 
         return output
-
-    def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+    
+    def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
 
@@ -397,16 +397,32 @@ class Anchor3DLane(BaseModule):
         should be double nested (i.e.  List[Tensor], List[List[dict]]), with
         the outer list indicating test time augmentations.
         """
+        if return_loss:
+            return self.forward_train(img, mask, img_metas, **kwargs)
+        else:
+            return self.forward_test(img, mask, img_metas, **kwargs)
+    
+
+    # def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+    #     """Calls either :func:`forward_train` or :func:`forward_test` depending
+    #     on whether ``return_loss`` is ``True``.
+
+    #     Note this setting will change the expected inputs. When
+    #     ``return_loss=True``, img and img_meta are single-nested (i.e. Tensor
+    #     and List[dict]), and when ``resturn_loss=False``, img and img_meta
+    #     should be double nested (i.e.  List[Tensor], List[List[dict]]), with
+    #     the outer list indicating test time augmentations.
+    #     """
         
-        gt_project_matrix = gt_project_matrix.squeeze(1)
-        output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-        return output
-        # losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
-        # return losses, other_vars
-        # if return_loss:
-        #     return self.forward_train(img, mask, img_metas, **kwargs)
-        # else:
-        #     return self.forward_test(img, mask, img_metas, **kwargs)
+    #     # gt_project_matrix = gt_project_matrix.squeeze(1)
+    #     # output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+    #     # return output
+    #     # losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
+    #     # return losses, other_vars
+    #     # if return_loss:
+    #     #     return self.forward_train(img, mask, img_metas, **kwargs)
+    #     # else:
+    #     #     return self.forward_test(img, mask, img_metas, **kwargs)
     
 
     @force_fp32()
