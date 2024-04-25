@@ -356,7 +356,10 @@ def main():
     logger.info(model)
 
     datasets = []
+    
     dataset = build_dataset(cfg.data.train)
+    
+    # dataset = build_dataset(cfg.data.test)
     datasets.append(dataset)
     # datasets.append(build_dataset(cfg.data.train))
 

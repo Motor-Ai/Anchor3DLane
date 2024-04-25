@@ -30,6 +30,27 @@ from ..builder import LANENET2S
 from .tools import homography_crop_resize
 from .utils import AnchorGenerator, nms_3d
 
+
+@torch.jit.script
+def custom_cumsum(input_, axis: int):
+    # Initialize the output tensor with zeros
+    output = torch.zeros_like(input_)
+
+    if axis == 1:
+        # Iterate over each row in the input tensor
+        for i in range(input_.size(0)):
+            # Iterate over each element in the row
+            for j in range(input_.size(1)):
+                if j == 0:
+                    # If it's the first element in the row, just copy it to the output
+                    output[i][j] = input_[i][j]
+                else:
+                    # Otherwise, accumulate the sum of previous elements in the row
+                    output[i][j] = output[i][j - 1] + input_[i][j]
+    else:
+        raise ValueError("Axis value other than 1 is not supported")
+    return output
+
 class DecodeLayer(nn.Module):
     def __init__(self, in_channel, mid_channel, out_channel):
         super(DecodeLayer, self).__init__()
@@ -310,10 +331,16 @@ class Anchor3DLane(BaseModule):
             reg_proposals_all.append(self.get_proposals(project_matrixes, anchor_feat, iter+1, proposals_prev))
             anchors_all.append(proposals_prev[:, :, :5+self.anchor_len*3])
 
-        output = {'reg_proposals':reg_proposals_all[-1], 'anchors':anchors_all[-1]}
+        proposals_list = self.nms(reg_proposals_all[-1], anchors_all[-1], self.test_cfg.nms_thres, 
+                                  self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
+                                  vis_thresh=self.test_cfg.vis_thresh)
+
+        output = {'reg_proposals':reg_proposals_all[-1], 'anchors':anchors_all[-1], 'proposals_list': proposals_list}
+        
         if self.iter_reg > 0:
             output_aux = {'reg_proposals':reg_proposals_all[:-1], 'anchors':anchors_all[:-1]}
             return output, output_aux
+        
         return output, None
         
 
@@ -335,8 +362,7 @@ class Anchor3DLane(BaseModule):
             h_g2feat = np.matmul(Hc, P_g2im)
             h_g2feats.append(torch.from_numpy(h_g2feat).type(torch.FloatTensor).to(device))
         return h_g2feats
-
-
+    
     def nms(self, batch_proposals, batch_anchors, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thresh=0.5):
         softmax = nn.Softmax(dim=1)
         proposals_list = []
@@ -356,8 +382,11 @@ class Anchor3DLane(BaseModule):
             if nms_thres > 0:
                 # refine vises to ensure consistent lane
                 vises = proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] >= vis_thresh  # need check  #[N, l]
-                flag_l = vises.cumsum(dim=1)
-                flag_r = vises.flip(dims=[1]).cumsum(dim=1).flip(dims=[1])
+                # flag_l = vises.cumsum(dim=1)
+                # flag_r = vises.flip(dims=[1]).cumsum(dim=1).flip(dims=[1])
+                flag_l = custom_cumsum(input_= vises, axis=1)
+                flag_r = custom_cumsum(input_=vises.flip(dims=[1]), axis=1).flip(dims=[1])
+                
                 refined_vises = (flag_l > 0) & (flag_r > 0)
                 if refine_vis:
                     proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] = refined_vises
@@ -380,30 +409,11 @@ class Anchor3DLane(BaseModule):
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, _ = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
 
-        proposals_list = self.nms(output['reg_proposals'], output['anchors'], self.test_cfg.nms_thres, 
-                                  self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
-                                  vis_thresh=self.test_cfg.vis_thresh)
-        output['proposals_list'] = proposals_list
+        
 
         return output
     
-    def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
-        """Calls either :func:`forward_train` or :func:`forward_test` depending
-        on whether ``return_loss`` is ``True``.
-
-        Note this setting will change the expected inputs. When
-        ``return_loss=True``, img and img_meta are single-nested (i.e. Tensor
-        and List[dict]), and when ``resturn_loss=False``, img and img_meta
-        should be double nested (i.e.  List[Tensor], List[List[dict]]), with
-        the outer list indicating test time augmentations.
-        """
-        if return_loss:
-            return self.forward_train(img, mask, img_metas, **kwargs)
-        else:
-            return self.forward_test(img, mask, img_metas, **kwargs)
-    
-
-    # def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+    # def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
     #     """Calls either :func:`forward_train` or :func:`forward_test` depending
     #     on whether ``return_loss`` is ``True``.
 
@@ -413,17 +423,38 @@ class Anchor3DLane(BaseModule):
     #     should be double nested (i.e.  List[Tensor], List[List[dict]]), with
     #     the outer list indicating test time augmentations.
     #     """
-        
-    #     # gt_project_matrix = gt_project_matrix.squeeze(1)
-    #     # output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-    #     # return output
-    #     # losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
-    #     # return losses, other_vars
-    #     # if return_loss:
-    #     #     return self.forward_train(img, mask, img_metas, **kwargs)
-    #     # else:
-    #     #     return self.forward_test(img, mask, img_metas, **kwargs)
+    #     if return_loss:
+    #         return self.forward_train(img, mask, img_metas, **kwargs)
+    #     else:
+    #         return self.forward_test(img, mask, img_metas, **kwargs)
     
+
+    def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+        """Calls either :func:`forward_train` or :func:`forward_test` depending
+        on whether ``return_loss`` is ``True``.
+
+        Note this setting will change the expected inputs. When
+        ``return_loss=True``, img and img_meta are single-nested (i.e. Tensor
+        and List[dict]), and when ``resturn_loss=False``, img and img_meta
+        should be double nested (i.e.  List[Tensor], List[List[dict]]), with
+        the outer list indicating test time augmentations.
+        """
+        
+        gt_project_matrix = gt_project_matrix.squeeze(1)
+        output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+        proposals_list = self.nms(output['reg_proposals'], output['anchors'], self.test_cfg.nms_thres, 
+                            self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
+                            vis_thresh=self.test_cfg.vis_thresh)
+        output['proposals_list'] = proposals_list
+
+        return output
+        # losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
+        # return losses, other_vars
+        # if return_loss:
+        #     return self.forward_train(img, mask, img_metas, **kwargs)
+        # else:
+        #     return self.forward_test(img, mask, img_metas, **kwargs)
+
 
     @force_fp32()
     def loss(self, output, gt_3dlanes, output_aux=None):
