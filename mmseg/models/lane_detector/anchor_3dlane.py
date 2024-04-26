@@ -442,9 +442,7 @@ class Anchor3DLane(BaseModule):
         
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-        proposals_list = self.nms(output['reg_proposals'], output['anchors'], self.test_cfg.nms_thres, 
-                            self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
-                            vis_thresh=self.test_cfg.vis_thresh)
+
         output['proposals_list'] = proposals_list
 
         return output
