@@ -408,9 +408,6 @@ class Anchor3DLane(BaseModule):
     def forward_test(self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs):
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, _ = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-
-        
-
         return output
     
     # def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
@@ -442,16 +439,7 @@ class Anchor3DLane(BaseModule):
         
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-
-        output['proposals_list'] = proposals_list
-
         return output
-        # losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
-        # return losses, other_vars
-        # if return_loss:
-        #     return self.forward_train(img, mask, img_metas, **kwargs)
-        # else:
-        #     return self.forward_test(img, mask, img_metas, **kwargs)
 
 
     @force_fp32()
@@ -497,8 +485,21 @@ class Anchor3DLane(BaseModule):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
+        
         gt_project_matrix = gt_project_matrix.squeeze(1)
+        import time 
+        
+        start = time.time()
+
         output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+
+        end = time.time()
+
+        print("Time taken for the entire thing: ", end - start)
+        
+        # return output
+        # gt_project_matrix = gt_project_matrix.squeeze(1)
+        # output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
         losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
         return losses, other_vars
 

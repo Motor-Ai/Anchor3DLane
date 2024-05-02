@@ -9,3 +9,4 @@ test.onnx
 async/
 **__pycache__**
 engines/*
+work_dir/

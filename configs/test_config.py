@@ -137,7 +137,7 @@ log_config = dict(
 # yapf:enable
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = None
+load_from = "work_dir/iter_80000.pth"
 resume_from = None
 workflow = [('train', 10000000)]
 cudnn_benchmark = True

@@ -15,8 +15,8 @@ import copy
 
 import mmcv
 from mmengine.model import revert_sync_batchnorm
-# from mmcv.runner import (get_dist_info, init_dist, load_checkpoint, HOOKS, DistSamplerSeedHook,
-                        #  wrap_fp16_model, DistSamplerSeedHook, build_runner, Fp16OptimizerHook, OptimizerHook)
+from mmcv.runner import (get_dist_info, init_dist, load_checkpoint, HOOKS, DistSamplerSeedHook,
+                         wrap_fp16_model, DistSamplerSeedHook, build_runner, Fp16OptimizerHook, OptimizerHook)
 from mmcv.utils import Config, DictAction, get_git_hash
 
 # from mmseg.core import DistEvalHook, EvalHook, build_optimizer
@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--config', default= 'configs/openlane/anchor3dlane.py', help='train config file path')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
-        '--load-from', help='the checkpoint file to load weights from')
+        '--load_from', help='the checkpoint file to load weights from')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
     parser.add_argument(
@@ -151,7 +151,8 @@ def main():
             'test_dataloader'
         ]
     })
-
+    checkpoint = torch.load("/home/ec2-user/vardeep_ws/Anchor3DLane/work_dir/openlane.pth")
+    model.load_state_dict(checkpoint['state_dict'])
     # The specific dataloader settings
     train_loader_cfg = {**loader_cfg, **cfg.data.get('test_dataloader', {})}
     data_loaders = build_dataloader(dataset, **train_loader_cfg)
