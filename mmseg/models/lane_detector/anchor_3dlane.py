@@ -35,7 +35,6 @@ from .utils import AnchorGenerator, nms_3d
 def custom_cumsum(input_, axis: int):
     # Initialize the output tensor with zeros
     output = torch.zeros_like(input_)
-
     if axis == 1:
         # Iterate over each row in the input tensor
         for i in range(input_.size(0)):
@@ -384,8 +383,8 @@ class Anchor3DLane(BaseModule):
                 vises = proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] >= vis_thresh  # need check  #[N, l]
                 # flag_l = vises.cumsum(dim=1)
                 # flag_r = vises.flip(dims=[1]).cumsum(dim=1).flip(dims=[1])
-                flag_l = custom_cumsum(input_= vises, axis=1)
-                flag_r = custom_cumsum(input_=vises.flip(dims=[1]), axis=1).flip(dims=[1])
+                flag_l = custom_cumsum(input_= vises.double(), axis=1)
+                flag_r = custom_cumsum(input_=vises.flip(dims=[1]).double(), axis=1).flip(dims=[1])
                 
                 refined_vises = (flag_l > 0) & (flag_r > 0)
                 if refine_vis:

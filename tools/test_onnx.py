@@ -182,12 +182,14 @@ def main():
                 model, data_with_metas,
                 "test.onnx",
                 input_names=['input'],
-                output_names=['output'],
+                output_names=["output", "output_1", "output_2", "output_3", "output_4"],
                 export_params=True,
                 keep_initializers_as_inputs=False,
                 verbose=True,
-                opset_version=16,)
-                # dynamic_axes=dynamic_axes)
+                opset_version=16,
+                dynamic_axes={"output_2": [0],
+                              "output_3": [0],
+                              "output_4": [0]})
     # breakpoint()
 
 
