@@ -10,3 +10,5 @@ async/
 **__pycache__**
 engines/*
 work_dir/
+amirstan_plugin/
+torch2trt_dynamic/

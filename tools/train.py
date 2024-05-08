@@ -358,7 +358,7 @@ def main():
     datasets = []
     
     dataset = build_dataset(cfg.data.train)
-    
+    test_something = dataset[0]
     # dataset = build_dataset(cfg.data.test)
     datasets.append(dataset)
     # datasets.append(build_dataset(cfg.data.train))
