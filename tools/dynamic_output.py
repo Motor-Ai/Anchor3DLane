@@ -152,12 +152,12 @@ def main():
             'test_dataloader'
         ]
     })
-    checkpoint = torch.load("/home/ec2-user/vardeep_ws/Anchor3DLane/work_dir/openlane.pth")
+    checkpoint = torch.load("work_dir/openlane.pth")
     model.load_state_dict(checkpoint['state_dict'])
     # The specific dataloader settings
-    train_loader_cfg = {**loader_cfg, **cfg.data.get('test_dataloader', {})}
-    data_loaders = build_dataloader(dataset, **train_loader_cfg)
-    input_ = next(iter(data_loaders))
+    # train_loader_cfg = {**loader_cfg, **cfg.data.get('test_dataloader', {})}
+    # data_loaders = build_dataloader(dataset, **train_loader_cfg)
+    # input_ = next(iter(data_loaders))
     import pickle 
     with open('data.pickle', 'rb') as handle:
         data = pickle.load(handle)
