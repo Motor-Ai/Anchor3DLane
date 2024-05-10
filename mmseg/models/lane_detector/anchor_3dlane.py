@@ -376,7 +376,8 @@ class Anchor3DLane(BaseModule):
                 scores = scores[above_threshold]
                 anchor_inds = anchor_inds[above_threshold]
             if proposals.shape[0] == 0:
-                proposals_list.append((proposals[[]], anchors[[]], None))
+                proposals_list.append(proposals)
+                # proposals_list.append((proposals[[]], anchors[[]], None))
                 continue
             if nms_thres > 0:
                 # refine vises to ensure consistent lane
@@ -392,10 +393,12 @@ class Anchor3DLane(BaseModule):
                 keep = nms_3d(proposals, scores, refined_vises, thresh=nms_thres, anchor_len=self.anchor_len)
                 proposals = proposals[keep]
                 anchor_inds = anchor_inds[keep]
-                proposals_list.append((proposals, anchors[anchor_inds], anchor_inds))
+                proposals_list.append(proposals)
+                # proposals_list.append((proposals, anchors[anchor_inds], anchor_inds))
             else:
-                proposals_list.append((proposals, anchors[anchor_inds], anchor_inds))
-        return proposals_list
+                proposals_list.append(proposals)
+                # proposals_list.append((proposals, anchors[anchor_inds], anchor_inds))
+        return torch.concatenate(proposals_list)
 
 
     def forward_dummy(self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs):
@@ -407,25 +410,14 @@ class Anchor3DLane(BaseModule):
     def forward_test(self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs):
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, _ = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+        
+        proposals_list = self.nms(output['reg_proposals'], output['anchors'], self.test_cfg.nms_thres, 
+                                  self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
+                                  vis_thresh=self.test_cfg.vis_thresh)
+        output['proposals_list'] = proposals_list
         return output
     
-    # def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
-    #     """Calls either :func:`forward_train` or :func:`forward_test` depending
-    #     on whether ``return_loss`` is ``True``.
-
-    #     Note this setting will change the expected inputs. When
-    #     ``return_loss=True``, img and img_meta are single-nested (i.e. Tensor
-    #     and List[dict]), and when ``resturn_loss=False``, img and img_meta
-    #     should be double nested (i.e.  List[Tensor], List[List[dict]]), with
-    #     the outer list indicating test time augmentations.
-    #     """
-    #     if return_loss:
-    #         return self.forward_train(img, mask, img_metas, **kwargs)
-    #     else:
-    #         return self.forward_test(img, mask, img_metas, **kwargs)
-    
-
-    def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+    def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
 
@@ -435,10 +427,25 @@ class Anchor3DLane(BaseModule):
         should be double nested (i.e.  List[Tensor], List[List[dict]]), with
         the outer list indicating test time augmentations.
         """
+        if return_loss:
+            return self.forward_train(img, mask, img_metas, **kwargs)
+        else:
+            return self.forward_test(img, mask, img_metas, **kwargs)
+    
+    # def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+    #     """Calls either :func:`forward_train` or :func:`forward_test` depending
+    #     on whether ``return_loss`` is ``True``.
+
+    #     Note this setting will change the expected inputs. When
+    #     ``return_loss=True``, img and img_meta are single-nested (i.e. Tensor
+    #     and List[dict]), and when ``resturn_loss=False``, img and img_meta
+    #     should be double nested (i.e.  List[Tensor], List[List[dict]]), with
+    #     the outer list indicating test time augmentations.
+    #     """
         
-        gt_project_matrix = gt_project_matrix.squeeze(1)
-        output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-        return output
+    #     gt_project_matrix = gt_project_matrix.squeeze(1)
+    #     output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+    #     return output
 
 
     @force_fp32()

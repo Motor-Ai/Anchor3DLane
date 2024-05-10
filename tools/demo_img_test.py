@@ -11,7 +11,6 @@ import numpy as np
 import torch
 import tracemalloc
 import copy
-from torch2trt_dynamic import module2trt, BuildEngineConfig, torch2trt_dynamic
 
 
 import mmcv
@@ -114,7 +113,23 @@ def parse_args():
 
     return args
 
+def resize_image(image, shape):
+    w, h = shape[2], shape[3]
+    resized_image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
+    return torch.tensor(resized_image)
+
+def find_img(dataset, img_path):
+    for idx, info in enumerate(dataset.img_infos):
+        name = info['filename']
+        basename = os.path.splitext(os.path.basename(name))[0]
+        query_name = os.path.splitext(os.path.basename(img_path))[0]
+        if basename == query_name:
+            return idx
+    return 0
+
 def main():
+
+    img_path = "test_images/150912151202610600.jpg"
     args = parse_args() 
     cfg = Config.fromfile(args.config)
     
@@ -132,9 +147,10 @@ def main():
             'we convert SyncBN to BN. Please use dist_train.sh which can '
             'avoid this error.')
         model = revert_sync_batchnorm(model)
-
-    dataset = build_dataset(cfg.data.test)
+    checkpoint = torch.load("work_dir/openlane.pth")
+    model.load_state_dict(checkpoint['state_dict'])
     
+    dataset = build_dataset(cfg.data.test)
     loader_cfg = dict(
         # cfg.gpus will be ignored if distributed
         num_gpus=1,
@@ -143,7 +159,7 @@ def main():
         drop_last=True,
         shuffle=cfg.data_shuffle,
         persistent_workers=False)
-    # The overall dataloader settings
+        # The overall dataloader settings
     loader_cfg.update({
         k: v
         for k, v in cfg.data.items() if k not in [
@@ -151,52 +167,25 @@ def main():
             'test_dataloader'
         ]
     })
-    checkpoint = torch.load("work_dir/openlane.pth")
-    model.load_state_dict(checkpoint['state_dict'])
-    # The specific dataloader settings
-    # train_loader_cfg = {**loader_cfg, **cfg.data.get('test_dataloader', {})}
-    # data_loaders = build_dataloader(dataset, **train_loader_cfg)
-    # input_ = next(iter(data_loaders))
-    import pickle 
-    with open('data.pickle', 'rb') as handle:
-        data = pickle.load(handle)
-    for i in range(len(data['img_metas']['ori_shape'])):
-        data['img_metas']['ori_shape'][i] = data['img_metas']['ori_shape'][i].cpu()
-    for i in range(len(data['gt_3dlanes'])):
-        data['gt_3dlanes'][i] = data['gt_3dlanes'][i].cpu()
-
-    model.eval()
-
-    data_with_metas = (
-    data['img'].cpu(),  # Include img_metas
-    data['mask'].cpu(),
-    data['img_metas'],
-    data['gt_3dlanes'],
-    data['gt_project_matrix'].cpu())
-    # Include other necessary keys from your original data dictionary
-    config_ = BuildEngineConfig(shape_ranges=dict(x=dict(min=(1, 86),
-                                                         opt=(3, 86),
-                                                         max=(10, 86),)))
-    trt_model = module2trt(model, 
-                           args=[*data_with_metas],
-                           config=config_)
-
-    # with torch.no_grad():
-    #     torch.onnx.export(
-    #             model, data_with_metas,
-    #             "test.onnx",
-    #             input_names=['input'],
-    #             output_names=["output", "output_1", "output_2", "output_3", "output_4"],
-    #             export_params=True,
-    #             keep_initializers_as_inputs=False,
-    #             verbose=True,
-    #             opset_version=16,
-    #             dynamic_axes={"output_2": [0],
-    #                           "output_3": [0],
-    #                           "output_4": [0]})
+    idx = find_img(dataset, img_path)
+    print("8" * 100, idx)
+    data = dataset[idx]
     # breakpoint()
-
-
+    for i in data:
+        try:
+            data[i] = data[i].data
+        except:
+            print()
+            print("I think its working")
+            print()
+    print(data['img'].shape)
+    data['img'] = data['img'].reshape(1, 3, 360, 480)
+    data['mask'] = data['mask'].reshape(1, 1, 360, 480)
+    
+    print(data['img'].shape)
+    out = model(img= data['img'], img_metas= data['img_metas'], mask =data['mask'], 
+                return_loss=False, gt_project_matrix=data['gt_project_matrix'])
+    print(len(out['proposals_list']))
 
 if __name__ == '__main__':
     main()

@@ -88,7 +88,7 @@ def load_annotation(path):
         d = json.load(f)
     return d
 
-def resize_image(imgage, shape):
+def resize_image(image, shape):
     w, h = shape[2], shape[3]
     resized_image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
     
