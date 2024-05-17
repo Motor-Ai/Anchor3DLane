@@ -185,7 +185,9 @@ def main():
     print(data['img'].shape)
     out = model(img= data['img'], img_metas= data['img_metas'], mask =data['mask'], 
                 return_loss=False, gt_project_matrix=data['gt_project_matrix'])
-    print(len(out['proposals_list']))
+    result = out['proposals_list']
+    res_idx = np.where(result.any(axis=1))
+    print(result[res_idx].shape)
 
 if __name__ == '__main__':
     main()

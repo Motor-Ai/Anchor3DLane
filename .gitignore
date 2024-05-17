@@ -12,3 +12,6 @@ engines/*
 work_dir/
 amirstan_plugin/
 torch2trt_dynamic/
+build/
+*.so
+*.plan

@@ -330,11 +330,11 @@ class Anchor3DLane(BaseModule):
             reg_proposals_all.append(self.get_proposals(project_matrixes, anchor_feat, iter+1, proposals_prev))
             anchors_all.append(proposals_prev[:, :, :5+self.anchor_len*3])
 
-        proposals_list = self.nms(reg_proposals_all[-1], anchors_all[-1], self.test_cfg.nms_thres, 
+        proposals_list = self.nms(reg_proposals_all[-1][0], anchors_all[-1][0], self.test_cfg.nms_thres, 
                                   self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
                                   vis_thresh=self.test_cfg.vis_thresh)
 
-        output = {'reg_proposals':reg_proposals_all[-1], 'anchors':anchors_all[-1], 'proposals_list': proposals_list}
+        output = {'reg_proposals':reg_proposals_all[-1], 'proposals_list': proposals_list}
         
         if self.iter_reg > 0:
             output_aux = {'reg_proposals':reg_proposals_all[:-1], 'anchors':anchors_all[:-1]}
@@ -362,44 +362,37 @@ class Anchor3DLane(BaseModule):
             h_g2feats.append(torch.from_numpy(h_g2feat).type(torch.FloatTensor).to(device))
         return h_g2feats
     
-    def nms(self, batch_proposals, batch_anchors, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thresh=0.5):
+    def nms(self, proposals, batch_anchors, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thresh=0.5):
         softmax = nn.Softmax(dim=1)
-        proposals_list = []
-        for proposals, anchors in zip(batch_proposals, batch_anchors):
-            anchor_inds = torch.arange(batch_proposals.shape[1], device=proposals.device)
-            # The gradients do not have to (and can't) be calculated for the NMS procedure
-            # apply nms
-            scores = 1 - softmax(proposals[:, 5 + self.anchor_len * 3:5 + self.anchor_len * 3+self.num_category])[:, 0]  # pos_score  # for debug
-            if conf_threshold > 0:
-                above_threshold = scores > conf_threshold
-                proposals = proposals[above_threshold]
-                scores = scores[above_threshold]
-                anchor_inds = anchor_inds[above_threshold]
-            if proposals.shape[0] == 0:
-                proposals_list.append(proposals)
-                # proposals_list.append((proposals[[]], anchors[[]], None))
-                continue
-            if nms_thres > 0:
-                # refine vises to ensure consistent lane
-                vises = proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] >= vis_thresh  # need check  #[N, l]
-                # flag_l = vises.cumsum(dim=1)
-                # flag_r = vises.flip(dims=[1]).cumsum(dim=1).flip(dims=[1])
-                flag_l = custom_cumsum(input_= vises.double(), axis=1)
-                flag_r = custom_cumsum(input_=vises.flip(dims=[1]).double(), axis=1).flip(dims=[1])
-                
-                refined_vises = (flag_l > 0) & (flag_r > 0)
-                if refine_vis:
-                    proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] = refined_vises
-                keep = nms_3d(proposals, scores, refined_vises, thresh=nms_thres, anchor_len=self.anchor_len)
-                proposals = proposals[keep]
-                anchor_inds = anchor_inds[keep]
-                proposals_list.append(proposals)
-                # proposals_list.append((proposals, anchors[anchor_inds], anchor_inds))
-            else:
-                proposals_list.append(proposals)
-                # proposals_list.append((proposals, anchors[anchor_inds], anchor_inds))
-        return torch.concatenate(proposals_list)
-
+        proposals_list = torch.zeros(128, 86)
+        
+        # for proposals in batch_proposals:
+        anchor_inds = torch.arange(proposals.shape[0], device=proposals.device)
+        # The gradients do not have to (and can't) be calculated for the NMS procedure
+        # apply nms
+        scores = 1 - softmax(proposals[:, 5 + self.anchor_len * 3:5 + self.anchor_len * 3+self.num_category])[:, 0]  # pos_score  # for debug
+        
+        above_threshold = scores > conf_threshold
+        proposals = proposals[above_threshold]
+        scores = scores[above_threshold]
+        anchor_inds = anchor_inds[above_threshold]
+        
+        vises = proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] >= vis_thresh  # need check  #[N, l]
+        flag_l = custom_cumsum(input_= vises.double(), axis=1)
+        flag_r = custom_cumsum(input_=vises.flip(dims=[1]).double(), axis=1).flip(dims=[1])
+        
+        refined_vises = (flag_l > 0) & (flag_r > 0)
+        
+        proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] = refined_vises
+        keep = nms_3d(proposals, scores, refined_vises, thresh=nms_thres, anchor_len=self.anchor_len)
+        proposals = proposals[keep]
+        
+        anchor_inds = anchor_inds[keep]
+        num_tensor = proposals.shape[0]
+        idx = torch.arange(num_tensor, device=proposals.device)
+        proposals_list[idx] = proposals[idx]
+            
+        return proposals_list
 
     def forward_dummy(self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs):
         mask = img.new_zeros((img.shape[0], 1, img.shape[2], img.shape[3]))
@@ -417,22 +410,7 @@ class Anchor3DLane(BaseModule):
         output['proposals_list'] = proposals_list
         return output
     
-    def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
-        """Calls either :func:`forward_train` or :func:`forward_test` depending
-        on whether ``return_loss`` is ``True``.
-
-        Note this setting will change the expected inputs. When
-        ``return_loss=True``, img and img_meta are single-nested (i.e. Tensor
-        and List[dict]), and when ``resturn_loss=False``, img and img_meta
-        should be double nested (i.e.  List[Tensor], List[List[dict]]), with
-        the outer list indicating test time augmentations.
-        """
-        if return_loss:
-            return self.forward_train(img, mask, img_metas, **kwargs)
-        else:
-            return self.forward_test(img, mask, img_metas, **kwargs)
-    
-    # def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+    # def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
     #     """Calls either :func:`forward_train` or :func:`forward_test` depending
     #     on whether ``return_loss`` is ``True``.
 
@@ -442,10 +420,25 @@ class Anchor3DLane(BaseModule):
     #     should be double nested (i.e.  List[Tensor], List[List[dict]]), with
     #     the outer list indicating test time augmentations.
     #     """
+    #     if return_loss:
+    #         return self.forward_train(img, mask, img_metas, **kwargs)
+    #     else:
+    #         return self.forward_test(img, mask, img_metas, **kwargs)
+    
+    def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+        """Calls either :func:`forward_train` or :func:`forward_test` depending
+        on whether ``return_loss`` is ``True``.
+
+        Note this setting will change the expected inputs. When
+        ``return_loss=True``, img and img_meta are single-nested (i.e. Tensor
+        and List[dict]), and when ``resturn_loss=False``, img and img_meta
+        should be double nested (i.e.  List[Tensor], List[List[dict]]), with
+        the outer list indicating test time augmentations.
+        """
         
-    #     gt_project_matrix = gt_project_matrix.squeeze(1)
-    #     output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-    #     return output
+        gt_project_matrix = gt_project_matrix.squeeze(1)
+        output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+        return output
 
 
     @force_fp32()

@@ -154,9 +154,9 @@ def main():
     checkpoint = torch.load("work_dir/openlane.pth")
     model.load_state_dict(checkpoint['state_dict'])
     # The specific dataloader settings
-    train_loader_cfg = {**loader_cfg, **cfg.data.get('test_dataloader', {})}
-    data_loaders = build_dataloader(dataset, **train_loader_cfg)
-    input_ = next(iter(data_loaders))
+    # train_loader_cfg = {**loader_cfg, **cfg.data.get('test_dataloader', {})}
+    # data_loaders = build_dataloader(dataset, **train_loader_cfg)
+    # input_ = next(iter(data_loaders))
     import pickle 
     with open('data.pickle', 'rb') as handle:
         data = pickle.load(handle)
@@ -182,14 +182,15 @@ def main():
                 model, data_with_metas,
                 "test.onnx",
                 input_names=['input'],
-                output_names=["output", "output_1", "output_2", "output_3", "output_4"],
+                output_names=["output", "output_1"],
                 export_params=True,
                 keep_initializers_as_inputs=False,
                 verbose=True,
                 opset_version=16,
-                dynamic_axes={"output_2": [0],
-                              "output_3": [0],
-                              "output_4": [0]})
+                # dynamic_axes={"output_2": [0],
+                #               "output_3": [0],
+                #               "output_4": [0]}
+                              )
     # breakpoint()
 
 
