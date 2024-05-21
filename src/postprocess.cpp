@@ -19,6 +19,7 @@ std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
       z_coordinate_start_idx, z_coordinate_start_idx + predication_steps - 1);
   std::vector<std::vector<float>> all_x =
       extract_columns<proposal_dim>(proposals_after_thresholding, x_indices);
+
   std::vector<std::vector<float>> all_z =
       extract_columns<proposal_dim>(proposals_after_thresholding, z_indices);
 
@@ -30,19 +31,28 @@ std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
   while (order.size() > 0) {
 
     int i = order[0];
+    // if (i < 0 || i >= all_x.size() || i >= all_z.size()) {
+    //   throw std::out_of_range("Index out of bounds");
+    // }
     keep.emplace_back(i);
     std::vector<float> x1 = all_x[i];
     std::vector<float> z1 = all_z[i];
 
-    FilterRows(all_x, order);
-    FilterRows(all_z, order);
+    std::vector<std::vector<float>> new_x = FilterRows(all_x, order);
+    std::vector<std::vector<float>> new_z = FilterRows(all_z, order);
 
-    std::vector<float> accumulated_dis = compute_distance(all_x, all_z, x1, z1);
-    PrintVec(order);
+    std::vector<float> accumulated_dis = compute_distance(new_x, new_z, x1, z1);
+    std::sort(accumulated_dis.begin(), accumulated_dis.end());
+    PrintVec(accumulated_dis);
 
     std::vector<int> indices_greter_than_threshold =
         distance_greater_indices(accumulated_dis, nms_thres);
+
+    PrintVec(indices_greter_than_threshold);
+
     get_new_order(order, indices_greter_than_threshold);
+    // PrintVec(order);
+    std::cout << std::endl;
   }
   PrintVec(keep);
   std::cout << "End is here... " << std::endl;
@@ -51,14 +61,8 @@ std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
 
 AnchorMat nms(py::list &proposals, float nms_thres, float conf_threshold,
               bool refine_vis, float vis_thresh) {
-  unsigned list_len = py::len(proposals);
-  //   std::cout << "hello sbjdfhsbdghb" << list_len;
 
-  AnchorMat proposals_arr;
-  proposals_arr = convert_pylist_to_arr(proposals);
-  std::cout << proposals_arr.size() << std::endl;
-
-  std::cout << proposals_arr[0][0];
+  AnchorMat proposals_arr = convert_pylist_to_arr(proposals);
 
   auto [proposals_after_thresholding, scores_after_thresholding,
         anchor_inds_after_thresholding] =

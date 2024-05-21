@@ -1,8 +1,8 @@
 // #include </home/sandhu/project/LaneSeg/Anchor3DLane/src/prints.cpp>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <tuple>
-
 constexpr int num_anchors = 4431;
 constexpr int proposal_dim = 86;
 constexpr int dim_anchor = 65;
@@ -27,8 +27,9 @@ template <typename T> void PrintVecVec(const std::vector<std::vector<T>> &mat) {
 }
 template <typename T> void PrintArr(std::array<T, proposal_dim> arr) {
   for (auto i : arr) {
-    std::cout << i << std::endl;
+    std::cout << i << "  ";
   }
+  std::cout << std::endl;
 }
 
 AnchorMat convert_pylist_to_arr(py::list proposals) {
@@ -43,7 +44,7 @@ AnchorMat convert_pylist_to_arr(py::list proposals) {
       proposal_arr.emplace_back(temp);
     }
   }
-  PrintArr(proposal_arr[0]);
+
   return proposal_arr;
 }
 
@@ -115,8 +116,9 @@ extract_columns(const std::vector<std::array<float, Cols>> &arr,
   return extracted_columns;
 }
 
-void FilterRows(std::vector<std::vector<float>> &data,
-                const std::vector<int> &order) {
+std::vector<std::vector<float>>
+FilterRows(const std::vector<std::vector<float>> &data,
+           const std::vector<int> &order) {
   // Create a vector to store the filtered data
   std::vector<int> order_copy = order;
 
@@ -127,7 +129,7 @@ void FilterRows(std::vector<std::vector<float>> &data,
   for (int i = 1; i < order_copy.size(); ++i) {
     other_data.push_back(data[order_copy[i]]);
   }
-  data = other_data;
+  return other_data;
 }
 
 template <typename T> std::vector<int> argsort(const std::vector<T> &v) {
@@ -156,9 +158,7 @@ std::vector<int> distance_greater_indices(const std::vector<float> &acc_dis,
   std::vector<int> indices;
   for (int i = 0; i < acc_dis.size(); ++i) {
     if (acc_dis[i] > threshold) {
-      std::cout << i << "  ";
-
-      std::cout << acc_dis[i] << "  " << threshold << std::endl;
+      // std::cout << i << "  " << acc_dis[i] << "  " << threshold << std::endl;
       indices.emplace_back(i);
     }
   }
@@ -182,22 +182,33 @@ compute_distance(const std::vector<std::vector<float>> &all_x,
                  const std::vector<std::vector<float>> &all_z,
                  const std::vector<float> &x1, const std::vector<float> &z1) {
   std::vector<float> distance_arr;
+  // std::cout << "---------------------X1----------------------------"
+  //           << std::endl;
+  // PrintVec(x1);
+  // std::cout << "---------------------Z1----------------------------"
+  //           << std::endl;
+  // PrintVec(z1);
 
   for (int i = 0; i < all_x.size(); ++i) {
     std::vector<float> x2 = all_x[i];
     std::vector<float> z2 = all_z[i];
     std::vector<float> distance__(x2.size());
+    std::vector<float> diff_x(x2.size());
+    std::vector<float> diff_z(x2.size());
 
-    std::transform(x1.begin(), x1.end(), x2.begin(), x2.begin(),
+    std::transform(x1.cbegin(), x1.cend(), x2.cbegin(), diff_x.begin(),
                    std::minus<float>());
-    std::transform(z1.begin(), z1.end(), z2.begin(), z2.begin(),
+    std::transform(z1.cbegin(), z1.cend(), z2.cbegin(), diff_z.begin(),
                    std::minus<float>());
 
-    std::transform(z2.begin(), z2.end(), x2.begin(), distance__.begin(),
+    std::transform(diff_z.cbegin(), diff_z.cend(), diff_x.cbegin(),
+                   distance__.begin(),
                    [](float z, float x) { return sqrt(z * z + x * x); });
+    // PrintVec(distance__);
     float accumulated_dis =
         std::accumulate(distance__.begin(), distance__.end(), 0.0);
-
+    // std::cout << accumulated_dis << std::endl;
+    // std::cout << std::endl;
     accumulated_dis /= (float)predication_steps;
     distance_arr.emplace_back(accumulated_dis);
   }

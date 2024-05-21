@@ -34,11 +34,11 @@ def nms_3d(proposals, scores,  thresh, anchor_len=10):
 
         dis = ((x1 - x2s) ** 2 + (z1 - z2s) ** 2) ** 0.5  # [n, l]
         dis = (dis).sum(dim=1) / (20)  # [n], incase no matched points
-
+        print(dis.sort())
         inds = torch.where(dis > thresh)[0]  # [n']
-
+        print(inds)
         order = order[inds + 1]   # [n']
-
+        # print(order)
         # if(count == 1):
             
         #     print("X1 -"*100)
@@ -193,7 +193,7 @@ def nms__(proposals, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thr
         proposals = proposals[above_threshold]
         scores = scores[above_threshold]
         anchor_inds = anchor_inds[above_threshold]
-
+    
     # if proposals.shape[0] == 0:
     #     proposals_list.append(proposals)
     #     # proposals_list.append((proposals[[]], anchors[[]], None))
@@ -210,6 +210,7 @@ def nms__(proposals, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thr
         # if refine_vis:
             # proposals[:, 5 + 20 * 2:5 + 20 * 3] = refined_vises
         keep = nms_3d(proposals, scores, thresh=nms_thres, anchor_len=20)
+        print("python", keep)
         proposals = proposals[keep]
         anchor_inds = anchor_inds[keep]
     return proposals
@@ -225,6 +226,7 @@ if __name__ == "__main__":
     model = TrtModel(trt_engine_path)
     shape = model.engine.get_tensor_shape("input")
 
+    torch.set_printoptions(sci_mode=False)
 
     for i in images_path:
         image = cv2.imread(i)
@@ -233,21 +235,21 @@ if __name__ == "__main__":
         result = model(resized_img, batch_size)
         
         proposals = torch.tensor(result[0].reshape(1,-1, 86))
+
         # anchors = torch.tensor(result[1].reshape(-1, 65))
-        # python_out = nms__(proposals[0], 2, 0.2, True, 0.5)
+        python_out = nms__(proposals[0], 2, 0.2, True, 0.5)
         # print("python -- " * 100, len(python_out))
-        # torch.set_printoptions(sci_mode=False)
 
         # print(python_out)
         proposals = proposals.numpy().astype(np.float32).flatten().tolist()
         # print(proposals[0:86])
         cpp_out = postprocess.nms(proposals, 2, 0.2, False, 0.5)
         
-        print("cpp", len(cpp_out))
-        for i in cpp_out:
-            print(i)
-            print(len(i))
-            print()
+        # print("cpp", len(cpp_out))
+        # for i in cpp_out:
+        #     print(i)
+        #     print(len(i))
+        #     print()
         
         # print(np.sum(np.abs(np.asarray(cpp_out) - np.asarray(python_out))))
         # break
