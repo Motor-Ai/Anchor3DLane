@@ -1,59 +1,13 @@
-// #include </home/sandhu/project/LaneSeg/Anchor3DLane/src/prints.cpp>
-#include <cmath>
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <math.h>
+#include <numeric>
 #include <tuple>
-constexpr int num_anchors = 4431;
-constexpr int proposal_dim = 86;
-constexpr int dim_anchor = 65;
-constexpr int x_coordinate_start_idx = 5;
-constexpr int z_coordinate_start_idx = 25;
-constexpr int predication_steps = 20;
-
-// constexpr int x_coordinate_start_idx = 1;
-// constexpr int z_coordinate_start_idx = 3;
-// constexpr int predication_steps = 2;
+#include <vector>
 
 using AnchorMat = std::vector<std::array<float, proposal_dim>>;
 using Anchor = std::array<float, proposal_dim>;
-
-template <typename T> void PrintVecVec(const std::vector<std::vector<T>> &mat) {
-  for (auto i : mat) {
-    for (auto j : i) {
-      std::cout << std::setw(3) << j << "  ";
-    }
-    std::cout << std::endl;
-  }
-}
-template <typename T> void PrintArr(std::array<T, proposal_dim> arr) {
-  for (auto i : arr) {
-    std::cout << i << "  ";
-  }
-  std::cout << std::endl;
-}
-
-AnchorMat convert_pylist_to_arr(py::list proposals) {
-  unsigned list_len = py::len(proposals);
-
-  AnchorMat proposal_arr;
-  for (int i = 0; i < list_len; ++i) {
-    Anchor temp;
-    int col = i % proposal_dim;
-    temp[col] = proposals[i].cast<float>();
-    if (col == proposal_dim - 1) {
-      proposal_arr.emplace_back(temp);
-    }
-  }
-
-  return proposal_arr;
-}
-
-template <typename T> void PrintVec(std::vector<T> vec) {
-  for (auto i : vec) {
-    std::cout << i << "  ";
-  }
-  std::cout << std::endl;
-}
 
 float softmax(std::vector<float> row) {
   std::transform(row.begin(), row.end(), row.begin(),
@@ -93,6 +47,21 @@ std::vector<T> get_items_from_indices(std::vector<T> data,
   }
   return output;
 }
+AnchorMat convert_pylist_to_arr(py::list proposals) {
+  unsigned list_len = py::len(proposals);
+
+  AnchorMat proposal_arr;
+  for (int i = 0; i < list_len; ++i) {
+    Anchor temp;
+    int col = i % proposal_dim;
+    temp[col] = proposals[i].cast<float>();
+    if (col == proposal_dim - 1) {
+      proposal_arr.emplace_back(temp);
+    }
+  }
+
+  return proposal_arr;
+}
 
 std::vector<int> create_sequence_vector(int start, int end) {
   std::vector<int> result(end - start + 1);
@@ -121,9 +90,9 @@ FilterRows(const std::vector<std::vector<float>> &data,
            const std::vector<int> &order) {
   // Create a vector to store the filtered data
   std::vector<int> order_copy = order;
+  std::sort(order_copy.begin() + 1, order_copy.end());
 
   std::vector<std::vector<float>> other_data;
-  std::sort(order_copy.begin() + 1, order_copy.end());
 
   // Iterate through the order vector
   for (int i = 1; i < order_copy.size(); ++i) {
@@ -145,21 +114,30 @@ template <typename T> std::vector<int> argsort(const std::vector<T> &v) {
 }
 
 void get_new_order(std::vector<int> &order, std::vector<int> indices) {
-  std::for_each(indices.begin(), indices.end(), [](int &i) { i += 1; });
+
   std::vector<int> new_order;
-  for (auto i : indices) {
-    new_order.emplace_back(order[i]);
+  for (auto i : order) {
+    if (std::find(indices.begin(), indices.end(), i) != indices.end()) {
+      /* indices contains i */
+      new_order.emplace_back(i);
+    } else
+      continue;
   }
   order = new_order;
 }
 
 std::vector<int> distance_greater_indices(const std::vector<float> &acc_dis,
-                                          const float &threshold) {
+                                          const float &threshold,
+                                          const std::vector<int> &order) {
+
+  std::vector<int> order_copy = order;
+  std::sort(order_copy.begin() + 1, order_copy.end());
+  order_copy.erase(order_copy.begin());
+
   std::vector<int> indices;
   for (int i = 0; i < acc_dis.size(); ++i) {
     if (acc_dis[i] > threshold) {
-      // std::cout << i << "  " << acc_dis[i] << "  " << threshold << std::endl;
-      indices.emplace_back(i);
+      indices.emplace_back(order_copy[i]);
     }
   }
   return indices;
@@ -182,33 +160,22 @@ compute_distance(const std::vector<std::vector<float>> &all_x,
                  const std::vector<std::vector<float>> &all_z,
                  const std::vector<float> &x1, const std::vector<float> &z1) {
   std::vector<float> distance_arr;
-  // std::cout << "---------------------X1----------------------------"
-  //           << std::endl;
-  // PrintVec(x1);
-  // std::cout << "---------------------Z1----------------------------"
-  //           << std::endl;
-  // PrintVec(z1);
 
   for (int i = 0; i < all_x.size(); ++i) {
     std::vector<float> x2 = all_x[i];
     std::vector<float> z2 = all_z[i];
     std::vector<float> distance__(x2.size());
-    std::vector<float> diff_x(x2.size());
-    std::vector<float> diff_z(x2.size());
 
-    std::transform(x1.cbegin(), x1.cend(), x2.cbegin(), diff_x.begin(),
+    std::transform(x1.begin(), x1.end(), x2.begin(), x2.begin(),
                    std::minus<float>());
-    std::transform(z1.cbegin(), z1.cend(), z2.cbegin(), diff_z.begin(),
+    std::transform(z1.begin(), z1.end(), z2.begin(), z2.begin(),
                    std::minus<float>());
 
-    std::transform(diff_z.cbegin(), diff_z.cend(), diff_x.cbegin(),
-                   distance__.begin(),
+    std::transform(z2.begin(), z2.end(), x2.begin(), distance__.begin(),
                    [](float z, float x) { return sqrt(z * z + x * x); });
-    // PrintVec(distance__);
     float accumulated_dis =
         std::accumulate(distance__.begin(), distance__.end(), 0.0);
-    // std::cout << accumulated_dis << std::endl;
-    // std::cout << std::endl;
+
     accumulated_dis /= (float)predication_steps;
     distance_arr.emplace_back(accumulated_dis);
   }
@@ -243,13 +210,4 @@ filter_proposals(const AnchorMat &proposals_arr, float conf_threshold) {
   return std::make_tuple(proposals_after_thresholding,
                          scores_after_thresholding,
                          anchor_inds_after_thresholding);
-}
-
-void PrintMat(const AnchorMat &mat) {
-  for (auto i : mat) {
-    for (auto j : i) {
-      std::cout << std::setw(3) << j << "  ";
-    }
-    std::cout << std::endl;
-  }
 }

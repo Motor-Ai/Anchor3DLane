@@ -7,7 +7,8 @@
 #include <pybind11/stl.h>
 #include <vector>
 namespace py = pybind11;
-#include </home/sandhu/project/LaneSeg/Anchor3DLane/src/utils.cpp>
+#include "prints.cpp"
+#include "utils.cpp"
 
 std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
                         std::vector<float> scores_after_thresholding,
@@ -26,14 +27,12 @@ std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
   std::vector<int> order, keep;
   order = argsort(scores_after_thresholding);
 
-  int count = 0;
-
   while (order.size() > 0) {
 
     int i = order[0];
-    // if (i < 0 || i >= all_x.size() || i >= all_z.size()) {
-    //   throw std::out_of_range("Index out of bounds");
-    // }
+    if (i < 0 || i >= all_x.size() || i >= all_z.size()) {
+      throw std::out_of_range("Index out of bounds");
+    }
     keep.emplace_back(i);
     std::vector<float> x1 = all_x[i];
     std::vector<float> z1 = all_z[i];
@@ -42,26 +41,17 @@ std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
     std::vector<std::vector<float>> new_z = FilterRows(all_z, order);
 
     std::vector<float> accumulated_dis = compute_distance(new_x, new_z, x1, z1);
-    std::sort(accumulated_dis.begin(), accumulated_dis.end());
-    PrintVec(accumulated_dis);
 
     std::vector<int> indices_greter_than_threshold =
-        distance_greater_indices(accumulated_dis, nms_thres);
-
-    PrintVec(indices_greter_than_threshold);
+        distance_greater_indices(accumulated_dis, nms_thres, order);
 
     get_new_order(order, indices_greter_than_threshold);
-    // PrintVec(order);
-    std::cout << std::endl;
   }
   PrintVec(keep);
-  std::cout << "End is here... " << std::endl;
   return keep;
 }
-
 AnchorMat nms(py::list &proposals, float nms_thres, float conf_threshold,
               bool refine_vis, float vis_thresh) {
-
   AnchorMat proposals_arr = convert_pylist_to_arr(proposals);
 
   auto [proposals_after_thresholding, scores_after_thresholding,
@@ -85,9 +75,3 @@ AnchorMat nms(py::list &proposals, float nms_thres, float conf_threshold,
 }
 
 PYBIND11_MODULE(postprocess, m) { m.def("nms", &nms); }
-
-// int main() {
-//   AnchorMat test_input = create_sample_input();
-//   nms(test_input, 0.2, 0.2, true, 0.5);
-//   std::cout << std::endl;
-// }

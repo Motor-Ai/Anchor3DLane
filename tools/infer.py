@@ -238,6 +238,7 @@ if __name__ == "__main__":
 
         # anchors = torch.tensor(result[1].reshape(-1, 65))
         python_out = nms__(proposals[0], 2, 0.2, True, 0.5)
+        print(len(python_out))
         # print("python -- " * 100, len(python_out))
 
         # print(python_out)
@@ -245,7 +246,7 @@ if __name__ == "__main__":
         # print(proposals[0:86])
         cpp_out = postprocess.nms(proposals, 2, 0.2, False, 0.5)
         
-        # print("cpp", len(cpp_out))
+        print("cpp", len(cpp_out))
         # for i in cpp_out:
         #     print(i)
         #     print(len(i))
