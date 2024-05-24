@@ -6,35 +6,14 @@
 #include <tuple>
 #include <vector>
 
-using AnchorMat = std::vector<std::array<float, proposal_dim>>;
-using Anchor = std::array<float, proposal_dim>;
+using AnchorMat = std::vector<std::vector<float>>;
+using Anchor = std::vector<float>;
 
 float softmax(std::vector<float> row) {
   std::transform(row.begin(), row.end(), row.begin(),
                  [](float r) { return exp(r); });
   float exp_row_sum = std::accumulate(row.begin(), row.end(), 0.0);
   return row[0] / exp_row_sum;
-}
-AnchorMat create_sample_input() {
-  AnchorMat anchor_vec;
-
-  Anchor anchor_1{0.5, 1.2, 1.5, 0.5, 0.7};
-  Anchor anchor_2{0.7, 1.3, 1.4, 0.6, 0.6};
-  Anchor anchor_3{0.8, 1.4, 1.3, 0.7, 0.5};
-  Anchor anchor_4{0.9, 1.5, 1.2, 0.8, 0.4};
-  Anchor anchor_5{0.3, 1.6, 1.1, 0.9, 0.3};
-  Anchor anchor_6{0.4, 1.7, 1.0, 1.0, 0.2};
-
-  // , anchor_2, anchor_3, anchor_4, anchor_5, anchor_6;
-
-  anchor_vec.emplace_back(anchor_1);
-  anchor_vec.emplace_back(anchor_2);
-  anchor_vec.emplace_back(anchor_3);
-  anchor_vec.emplace_back(anchor_4);
-  anchor_vec.emplace_back(anchor_5);
-  anchor_vec.emplace_back(anchor_6);
-
-  return anchor_vec;
 }
 
 template <typename T>
@@ -47,41 +26,40 @@ std::vector<T> get_items_from_indices(std::vector<T> data,
   }
   return output;
 }
-AnchorMat convert_pylist_to_arr(py::list proposals) {
-  unsigned list_len = py::len(proposals);
+// AnchorMat convert_pylist_to_arr(py::list proposals) {
+//   unsigned list_len = py::len(proposals);
 
-  AnchorMat proposal_arr;
-  for (int i = 0; i < list_len; ++i) {
-    Anchor temp;
-    int col = i % proposal_dim;
-    temp[col] = proposals[i].cast<float>();
-    if (col == proposal_dim - 1) {
-      proposal_arr.emplace_back(temp);
-    }
-  }
+//   AnchorMat proposal_arr;
+//   for (int i = 0; i < list_len; ++i) {
+//     Anchor temp;
+//     int col = i % proposal_dim;
+//     temp[col] = proposals[i].cast<float>();
+//     if (col == proposal_dim - 1) {
+//       proposal_arr.emplace_back(temp);
+//     }
+//   }
 
-  return proposal_arr;
-}
+//   return proposal_arr;
+// }
 
 std::vector<int> create_sequence_vector(int start, int end) {
+  // could use directly in the function. It is one line 
+  // 
   std::vector<int> result(end - start + 1);
   std::iota(result.begin(), result.end(), start);
   return result;
 }
 
 template <int Cols>
-std::vector<std::vector<float>>
-extract_columns(const std::vector<std::array<float, Cols>> &arr,
-                const std::vector<int> &columns) {
-  std::vector<std::vector<float>> extracted_columns(
-      arr.size(), std::vector<float>(columns.size()));
+AnchorMat extract_columns(const AnchorMat &arr,
+                          const std::vector<int> &columns) {
+  AnchorMat extracted_columns(arr.size(), std::vector<float>(columns.size()));
 
   for (size_t i = 0; i < arr.size(); ++i) {
     for (size_t j = 0; j < columns.size(); ++j) {
       extracted_columns[i][j] = arr[i][columns[j]];
     }
   }
-
   return extracted_columns;
 }
 
@@ -155,6 +133,7 @@ std::vector<float> compute_score(const AnchorMat &proposals) {
   }
   return scores;
 }
+
 std::vector<float>
 compute_distance(const std::vector<std::vector<float>> &all_x,
                  const std::vector<std::vector<float>> &all_z,
@@ -196,8 +175,8 @@ filter_proposals(const AnchorMat &proposals_arr, float conf_threshold) {
   AnchorMat proposals_after_thresholding;
   std::vector<float> scores_after_thresholding;
   std::vector<int> anchor_inds_after_thresholding;
-  std::vector<float> scores = compute_score(proposals_arr);
-  //   std::vector<float> scores = test_scores(proposals_arr);
+  // std::vector<float> scores = compute_score(proposals_arr);
+  std::vector<float> scores = test_scores(proposals_arr);
 
   for (size_t i = 0; i < scores.size(); ++i) {
     if (scores[i] > conf_threshold) {

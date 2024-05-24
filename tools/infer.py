@@ -18,8 +18,6 @@ def nms_3d(proposals, scores,  thresh, anchor_len=10):
     
     order = scores.argsort(descending=True)
     keep = []
-    count = 0
-    torch.set_printoptions(threshold=10_000)
 
     while order.shape[0] > 0:
     
@@ -34,32 +32,8 @@ def nms_3d(proposals, scores,  thresh, anchor_len=10):
 
         dis = ((x1 - x2s) ** 2 + (z1 - z2s) ** 2) ** 0.5  # [n, l]
         dis = (dis).sum(dim=1) / (20)  # [n], incase no matched points
-        print(dis.sort())
         inds = torch.where(dis > thresh)[0]  # [n']
-        print(inds)
         order = order[inds + 1]   # [n']
-        # print(order)
-        # if(count == 1):
-            
-        #     print("X1 -"*100)
-        #     print(x1)
-        #     print("Z1 -"*100)
-        #     print(z1)
-
-        #     print("X2 -"*100)
-        #     print(x2s.shape)
-        #     print(x2s[0,:])
-            
-        #     print("Z2 -"*100)
-        #     print(z2s.shape)
-        #     print(z2s[0,:])
-            
-        #     print("distance -"*100)
-        #     print((dis).sort()[0])
-        #     print(dis.shape)
-        #     break
-
-        count += 1
     return torch.tensor(keep)
 
 
@@ -116,7 +90,6 @@ class TrtModel:
                 outputs.append(HostDeviceMem(host_mem, device_mem))
         return inputs, outputs, bindings, stream
        
-            
     def __call__(self,x:np.ndarray, batch_size=1):
         
         x = x.astype(self.dtype)
@@ -183,7 +156,7 @@ def custom_cumsum(input_, axis: int):
     return output
 
 
-def nms__(proposals, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thresh=0.5):
+def python_nms(proposals, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thresh=0.5):
     softmax = nn.Softmax(dim=1)
     
     scores = 1 - softmax(proposals[:, 5 + 20 * 3:5 + 20 * 3+21])[:, 0]  # pos_score  # for debug
@@ -194,23 +167,8 @@ def nms__(proposals, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thr
         scores = scores[above_threshold]
         anchor_inds = anchor_inds[above_threshold]
     
-    # if proposals.shape[0] == 0:
-    #     proposals_list.append(proposals)
-    #     # proposals_list.append((proposals[[]], anchors[[]], None))
-    #     continue
     if nms_thres > 0:
-        # refine vises to ensure consistent lane
-        # vises = proposals[:, 5 + 20* 2:5 + 20 * 3] >= vis_thresh  # need check  #[N, l]
-        # flag_l = vises.cumsum(dim=1)
-        # flag_r = vises.flip(dims=[1]).cumsum(dim=1).flip(dims=[1])
-        # flag_l = custom_cumsum(input_= vises.double(), axis=1)
-        # flag_r = custom_cumsum(input_=vises.flip(dims=[1]).double(), axis=1).flip(dims=[1])
-        
-        # refined_vises = (flag_l > 0) & (flag_r > 0)
-        # if refine_vis:
-            # proposals[:, 5 + 20 * 2:5 + 20 * 3] = refined_vises
         keep = nms_3d(proposals, scores, thresh=nms_thres, anchor_len=20)
-        print("python", keep)
         proposals = proposals[keep]
         anchor_inds = anchor_inds[keep]
     return proposals
@@ -231,31 +189,14 @@ if __name__ == "__main__":
     for i in images_path:
         image = cv2.imread(i)
         resized_img = resize_image(image, shape)
-
         result = model(resized_img, batch_size)
-        
         proposals = torch.tensor(result[0].reshape(1,-1, 86))
 
-        # anchors = torch.tensor(result[1].reshape(-1, 65))
-        python_out = nms__(proposals[0], 2, 0.2, True, 0.5)
+        # Python output
+        python_out = python_nms(proposals[0], 2, 0.2, True, 0.5)
         print(len(python_out))
-        # print("python -- " * 100, len(python_out))
 
-        # print(python_out)
+        # Proposals flattened for cpp
         proposals = proposals.numpy().astype(np.float32).flatten().tolist()
-        # print(proposals[0:86])
         cpp_out = postprocess.nms(proposals, 2, 0.2, False, 0.5)
         
-        print("cpp", len(cpp_out))
-        # for i in cpp_out:
-        #     print(i)
-        #     print(len(i))
-        #     print()
-        
-        # print(np.sum(np.abs(np.asarray(cpp_out) - np.asarray(python_out))))
-        # break
-        # print("Python: ", len(output))
-        # result = result[1].reshape(128, 86)
-        # res_idx = np.where(result.any(axis=1))
-        # print(result[res_idx].shape)
-        print("End")
