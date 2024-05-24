@@ -70,8 +70,8 @@ class LaneVis(object):
                               14: 'others',
                               20: 'roadedge'}
 
-    def vis(self, gt, pred, save_dir, img_dir, img_name, prob_th=0.5):
-        img_path = os.path.join(img_dir, 'images', img_name)
+    def vis(self, gt, pred, save_dir, img_dir, img_name, prob_th=0.02):
+        img_path = os.path.join('data', img_name)
         fig = plt.figure()
         ax1 = fig.add_subplot(131)
         ax2 = fig.add_subplot(132)
@@ -155,7 +155,7 @@ class LaneVis(object):
         P_gt = np.matmul(self.H_crop, P_g2im)
         img = cv2.imread(img_path)
         img = cv2.warpPerspective(img, self.H_crop, (self.resize_w, self.resize_h))
-        img = img.astype(np.float) / 255
+        img = img.astype(float) / 255
         
         H_ipm2g = cv2.getPerspectiveTransform(
             np.float32([[0, 0], [self.ipm_w - 1, 0], [0, self.ipm_h - 1], [self.ipm_w - 1, self.ipm_h - 1]]), 
@@ -165,7 +165,7 @@ class LaneVis(object):
         H_im2g = np.linalg.inv(H_g2im)
         H_im2ipm = np.linalg.inv(np.matmul(H_g2im, H_ipm2g))
         raw_img = cv2.imread(img_path)
-        raw_img = raw_img.astype(np.float) / 255
+        raw_img = raw_img.astype(float) / 255
         im_ipm = cv2.warpPerspective(raw_img, H_im2ipm, (self.ipm_w, self.ipm_h))
         im_ipm = np.clip(im_ipm, 0, 1)
 
@@ -426,5 +426,6 @@ class LaneVis(object):
             if i % vis_step > 0:
                 continue
             raw_file = pred['file_path']
+            raw_file = os.path.join('zod_dataset/single_frames', raw_file)
             gt = gts[raw_file]
             self.vis(gt, pred, save_dir, img_dir, raw_file, prob_th)

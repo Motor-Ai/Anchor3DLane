@@ -1,1 +1,13 @@
+data/
+output/
+.venv/
+.vscode/
+.idea/
 *.pyc
+data.pickle
+test.onnx
+async/
+**/__pycache__/
+cache_dense/
+.neptune/
+mmsegmentation.egg-info/
