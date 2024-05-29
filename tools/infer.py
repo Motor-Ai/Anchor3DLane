@@ -193,15 +193,15 @@ if __name__ == "__main__":
         proposals = torch.tensor(result[0].reshape(1,-1, 86))
 
         # Python output
-        python_out = python_nms(proposals[0], 2, 0.2, True, 0.5)
-        python_out = python_out.numpy().astype(np.float32).flatten()
-        np.savetxt("ooutput.txt", python_out, fmt='%1.4f')
+        # python_out = python_nms(proposals[0], 2, 0.2, True, 0.5)
+        # python_out = python_out.numpy().astype(np.float32).flatten()
+        # np.savetxt("output.txt", python_out, fmt='%1.4f')
 
         # print(len(python_out))
 
         # Proposals flattened for cpp
-        # proposals = proposals.numpy().astype(np.float32).flatten()
-        # np.savetxt("proposals.txt", proposals, fmt='%1.4f')
+        proposals = proposals.numpy().astype(np.float32).flatten()
+        np.savetxt("proposals.txt", proposals, fmt='%1.4f')
         # np.printoptions(suppress=True)
         # cpp_out = postprocess.nms(proposals, 2, 0.2, False, 0.5)
         

@@ -186,9 +186,9 @@ filter_proposals(const AnchorMat &proposals_arr, float conf_threshold,
   std::vector<int> anchor_inds_after_thresholding;
   std::vector<float> scores;
   if (is_test) {
-    std::vector<float> scores = test_scores(proposals_arr);
+    scores = test_scores(proposals_arr);
   } else {
-    std::vector<float> scores = compute_score(proposals_arr);
+    scores = compute_score(proposals_arr);
   }
 
   for (size_t i = 0; i < scores.size(); ++i) {

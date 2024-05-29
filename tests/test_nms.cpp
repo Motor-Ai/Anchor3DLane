@@ -40,10 +40,9 @@ AnchorMat create_sample_output() {
 
 TEST(TestSimpleInput, InitWithSixAnchors) {
   AnchorMat test_input = create_sample_input();
-  NMS test_obj(test_input, true);
+  NMS test_obj(test_input, 0.2, true);
   AnchorMat required_output = create_sample_output();
   AnchorMat output = test_obj.nms();
-  std::cout << "output" << std::endl;
 
   for (int i = 0; i < required_output.size(); ++i) {
     for (int j = 0; j < (sizeof(i) / sizeof(float)); ++j) {
@@ -128,7 +127,7 @@ TEST(TestNMS3D, Hello) {
   AnchorMat test_input = create_sample_input();
   auto [proposals, scores, anchor_inds] =
       filter_proposals(test_input, 0.0, true);
-  NMS test_obj(test_input, true);
+  NMS test_obj(test_input, 0.2, true);
   std::vector<int> keep = test_obj.nms_3d(proposals, scores, 0.2);
   std::vector<int> expected_out_indices{3, 1, 5};
   ASSERT_EQ(keep.size(), expected_out_indices.size());
@@ -188,9 +187,18 @@ TEST(TestFullFunctional, Hello) {
 
   AnchorMat input_anchors = read_anchors_from_file(
       "/home/sandhu/project/LaneSeg/Anchor3DLane/proposals.txt");
-  NMS test_obj(input_anchors, false);
-  // AnchorMat required_output = create_sample_output();
+  AnchorMat required_output = read_anchors_from_file(
+      "/home/sandhu/project/LaneSeg/Anchor3DLane/output.txt");
+  std::cout << required_output.size();
+  std::cout << input_anchors.size();
+
+  NMS test_obj(input_anchors, 2.0, false);
   AnchorMat output = test_obj.nms();
   std::cout << "output" << std::endl;
-  std::cout << output.size();
+  std::cout << required_output.size();
+  for (int i = 0; i < required_output.size(); ++i) {
+    for (int j = 0; j < (sizeof(i) / sizeof(float)); ++j) {
+      ASSERT_EQ(required_output[i][j], output[i][j]);
+    }
+  }
 }

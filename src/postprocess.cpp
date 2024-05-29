@@ -13,7 +13,7 @@
 
 class NMS {
 private:
-  float nms_thres = 0.2;
+  float nms_thres;
   float conf_threshold = 0.2;
   bool refine_vis = false;
   float vis_thresh = 0.5;
@@ -23,9 +23,10 @@ private:
 public:
   // NMS(py::list &proposals) { proposals_arr =
   // convert_pylist_to_arr(proposals); }
-  NMS(AnchorMat proposals, bool is_test_flag) {
+  NMS(AnchorMat proposals, int nms_thold, bool is_test_flag) {
     proposals_arr = proposals;
     is_test = is_test_flag;
+    nms_thres = nms_thold;
   }
 
   std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
