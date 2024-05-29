@@ -43,8 +43,8 @@ std::vector<T> get_items_from_indices(std::vector<T> data,
 // }
 
 std::vector<int> create_sequence_vector(int start, int end) {
-  // could use directly in the function. It is one line 
-  // 
+  // could use directly in the function. It is one line
+  //
   std::vector<int> result(end - start + 1);
   std::iota(result.begin(), result.end(), start);
   return result;
@@ -134,26 +134,34 @@ std::vector<float> compute_score(const AnchorMat &proposals) {
   return scores;
 }
 
+std::vector<float> distance_between_2_lanes(std::vector<float> x1,
+                                            std::vector<float> x2,
+                                            std::vector<float> z1,
+                                            std::vector<float> z2) {
+  std::vector<float> distance(x2.size());
+
+  std::transform(x1.begin(), x1.end(), x2.begin(), x2.begin(),
+                 std::minus<float>());
+  std::transform(z1.begin(), z1.end(), z2.begin(), z2.begin(),
+                 std::minus<float>());
+
+  std::transform(z2.begin(), z2.end(), x2.begin(), distance.begin(),
+                 [](float z, float x) { return sqrt(z * z + x * x); });
+  return distance;
+}
+
 std::vector<float>
-compute_distance(const std::vector<std::vector<float>> &all_x,
-                 const std::vector<std::vector<float>> &all_z,
-                 const std::vector<float> &x1, const std::vector<float> &z1) {
+compute_all_lane_distance(const std::vector<std::vector<float>> &all_x,
+                          const std::vector<std::vector<float>> &all_z,
+                          const std::vector<float> &x1,
+                          const std::vector<float> &z1) {
   std::vector<float> distance_arr;
 
   for (int i = 0; i < all_x.size(); ++i) {
     std::vector<float> x2 = all_x[i];
     std::vector<float> z2 = all_z[i];
-    std::vector<float> distance__(x2.size());
-
-    std::transform(x1.begin(), x1.end(), x2.begin(), x2.begin(),
-                   std::minus<float>());
-    std::transform(z1.begin(), z1.end(), z2.begin(), z2.begin(),
-                   std::minus<float>());
-
-    std::transform(z2.begin(), z2.end(), x2.begin(), distance__.begin(),
-                   [](float z, float x) { return sqrt(z * z + x * x); });
-    float accumulated_dis =
-        std::accumulate(distance__.begin(), distance__.end(), 0.0);
+    std::vector<float> dis = distance_between_2_lanes(x1, x2, z1, z2);
+    float accumulated_dis = std::accumulate(dis.begin(), dis.end(), 0.0);
 
     accumulated_dis /= (float)predication_steps;
     distance_arr.emplace_back(accumulated_dis);
@@ -170,13 +178,18 @@ std::vector<float> test_scores(const AnchorMat &proposals_arr) {
 }
 
 std::tuple<AnchorMat, std::vector<float>, std::vector<int>>
-filter_proposals(const AnchorMat &proposals_arr, float conf_threshold) {
+filter_proposals(const AnchorMat &proposals_arr, float conf_threshold,
+                 bool is_test) {
   std::vector<int> anchor_inds = create_sequence_vector(0, num_anchors - 1);
   AnchorMat proposals_after_thresholding;
   std::vector<float> scores_after_thresholding;
   std::vector<int> anchor_inds_after_thresholding;
-  // std::vector<float> scores = compute_score(proposals_arr);
-  std::vector<float> scores = test_scores(proposals_arr);
+  std::vector<float> scores;
+  if (is_test) {
+    std::vector<float> scores = test_scores(proposals_arr);
+  } else {
+    std::vector<float> scores = compute_score(proposals_arr);
+  }
 
   for (size_t i = 0; i < scores.size(); ++i) {
     if (scores[i] > conf_threshold) {

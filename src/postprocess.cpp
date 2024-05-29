@@ -1,4 +1,6 @@
 
+#include "prints.cpp"
+#include "utils.cpp"
 #include <algorithm>
 #include <array>
 #include <math.h>
@@ -6,22 +8,33 @@
 // #include <pybind11/pybind11.h>
 // #include <pybind11/stl.h>
 #include <vector>
-// namespace py = pybind11;
-#include "prints.cpp"
-#include "utils.cpp"
 
+// namespace py = pybind11;
 
 class NMS {
-
-  // NMS() {
-
-  // }
+private:
+  float nms_thres = 0.2;
+  float conf_threshold = 0.2;
+  bool refine_vis = false;
+  float vis_thresh = 0.5;
+  AnchorMat proposals_arr;
+  bool is_test;
 
 public:
+  // NMS(py::list &proposals) { proposals_arr =
+  // convert_pylist_to_arr(proposals); }
+  NMS(AnchorMat proposals, bool is_test_flag) {
+    proposals_arr = proposals;
+    is_test = is_test_flag;
+  }
+
   std::vector<int> nms_3d(AnchorMat proposals_after_thresholding,
                           std::vector<float> scores_after_thresholding,
                           float nms_thres) {
-
+    /**
+     * @brief
+     *
+     */
     std::vector<int> x_indices = create_sequence_vector(
         x_coordinate_start_idx, x_coordinate_start_idx + predication_steps - 1);
     std::vector<int> z_indices = create_sequence_vector(
@@ -49,7 +62,7 @@ public:
       std::vector<std::vector<float>> new_z = FilterRows(all_z, order);
 
       std::vector<float> accumulated_dis =
-          compute_distance(new_x, new_z, x1, z1);
+          compute_all_lane_distance(new_x, new_z, x1, z1);
 
       std::vector<int> indices_greter_than_threshold =
           distance_greater_indices(accumulated_dis, nms_thres, order);
@@ -59,16 +72,14 @@ public:
     return keep;
   }
 
-  // AnchorMat nms(py::list &proposals, float nms_thres, float conf_threshold,
-  //               bool refine_vis, float vis_thresh) {
-
-  AnchorMat nms(AnchorMat proposals_arr, float nms_thres, float conf_threshold,
-                bool refine_vis, float vis_thresh) {
-    // AnchorMat proposals_arr = convert_pylist_to_arr(proposals);
-
+  AnchorMat nms() {
+    /**
+     * @brief
+     *
+     */
     auto [proposals_after_thresholding, scores_after_thresholding,
           anchor_inds_after_thresholding] =
-        filter_proposals(proposals_arr, conf_threshold);
+        filter_proposals(proposals_arr, conf_threshold, is_test);
 
     if (proposals_after_thresholding.size() == 0) {
       // TODO: Raise Error!
@@ -77,6 +88,7 @@ public:
 
     std::vector<int> keep = nms_3d(proposals_after_thresholding,
                                    scores_after_thresholding, nms_thres);
+    std::cout << keep.size() << std::endl;
 
     AnchorMat out_proposals;
     std::vector<int> out_anchors;
