@@ -1,64 +1,53 @@
-#include "../src/postprocess.cpp"
+#include "postprocess.hpp"
+#include "utils.hpp"
+
 #include <cmath>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <string>
-AnchorMat create_sample_input() {
-  AnchorMat anchor_vec;
 
-  Anchor anchor_1{0.5, 1.2, 1.5, 0.5, 0.7};
-  Anchor anchor_2{0.7, 1.3, 1.4, 0.6, 0.6};
-  Anchor anchor_3{0.8, 1.4, 1.3, 0.7, 0.5};
-  Anchor anchor_4{0.9, 1.5, 1.2, 0.8, 0.4};
-  Anchor anchor_5{0.3, 1.6, 1.1, 0.9, 0.3};
-  Anchor anchor_6{0.4, 1.7, 1.0, 1.0, 0.2};
+/**
+ * @brief This is a test function which makes sample input for testing.
+ * We have the following information:
+ * 1. Index 0: Score
+ * 2. Index 1, 2: x-coordinates
+ * 2. Index 3, 4: z-coordinates
+ *
+ * @return AnchorMat
+ */
 
-  anchor_vec.emplace_back(anchor_1);
-  anchor_vec.emplace_back(anchor_2);
-  anchor_vec.emplace_back(anchor_3);
-  anchor_vec.emplace_back(anchor_4);
-  anchor_vec.emplace_back(anchor_5);
-  anchor_vec.emplace_back(anchor_6);
-
-  return anchor_vec;
-}
-
-AnchorMat create_sample_output() {
-  AnchorMat anchor_vec;
-
-  Anchor anchor_4{0.9, 1.5, 1.2, 0.8, 0.4};
-  Anchor anchor_2{0.7, 1.3, 1.4, 0.6, 0.6};
-  Anchor anchor_6{0.4, 1.7, 1.0, 1.0, 0.2};
-
-  anchor_vec.emplace_back(anchor_4);
-  anchor_vec.emplace_back(anchor_2);
-  anchor_vec.emplace_back(anchor_6);
-
-  return anchor_vec;
-}
-
+/**
+ * @brief Tests NMS initialization with six anchors.
+ */
 TEST(TestSimpleInput, InitWithSixAnchors) {
   AnchorMat test_input = create_sample_input();
   NMS test_obj(test_input, 0.2, true);
   AnchorMat required_output = create_sample_output();
   AnchorMat output = test_obj.nms();
+  std::cout << output.size() << std::endl;
 
-  for (int i = 0; i < required_output.size(); ++i) {
+  for (int i = 0; i < output.size(); ++i) {
     for (int j = 0; j < (sizeof(i) / sizeof(float)); ++j) {
       ASSERT_EQ(required_output[i][j], output[i][j]);
     }
   }
 }
 
-TEST(TestSoftmax, Hello) {
+/**
+ * @brief Tests the softmax function with a simple input.
+ */
+TEST(TestSoftmax, SampleSoftmaxTest) {
   std::vector<float> input_vec{0.0};
   float req_out = 1.0;
   float output = softmax(input_vec);
   ASSERT_EQ(req_out, output);
 }
 
-TEST(TestGetNewOrder, Hello) {
+/**
+ * @brief Tests the get_new_order function with a simple input.
+ */
+TEST(TestGetNewOrder, SimpleNewOrderTest) {
   std::vector<int> input_order{5, 4, 2, 1, 89};
   std::vector<int> indices{0, 1, 2, 3};
   std::vector<int> req_out{2, 1};
@@ -67,20 +56,19 @@ TEST(TestGetNewOrder, Hello) {
   ASSERT_EQ(req_out, input_order);
 }
 
-bool floatCompare(float f1, float f2) {
-  static constexpr auto epsilon = 1.0e-01f;
-  if (fabs(f1 - f2) <= epsilon)
-    return true;
-  return false;
-}
-
-TEST(TestDistances, Hello) {
+/**
+ * @brief Tests the distance computation between two lanes.
+ */
+TEST(TestDistances, SimpleDistanceTest) {
   AnchorMat test_input = create_sample_input();
-
+  int x_coordinate_start_idx = 1;
+  int z_coordinate_start_idx = 3;
+  int prediction_steps = 2;
+  constexpr int proposal_dim = 5;
   std::vector<int> x_indices = create_sequence_vector(
-      x_coordinate_start_idx, x_coordinate_start_idx + predication_steps - 1);
+      x_coordinate_start_idx, x_coordinate_start_idx + prediction_steps - 1);
   std::vector<int> z_indices = create_sequence_vector(
-      z_coordinate_start_idx, z_coordinate_start_idx + predication_steps - 1);
+      z_coordinate_start_idx, z_coordinate_start_idx + prediction_steps - 1);
 
   std::vector<std::vector<float>> all_x =
       extract_columns<proposal_dim>(test_input, x_indices);
@@ -97,21 +85,10 @@ TEST(TestDistances, Hello) {
   // ASSERT_EQ(req_out, input_order);
 }
 
-AnchorMat conf_testing() {
-  AnchorMat anchor_vec;
-
-  Anchor anchor_2{0.7, 1.3, 1.4, 0.6, 0.6};
-  Anchor anchor_3{0.8, 1.4, 1.3, 0.7, 0.5};
-  Anchor anchor_4{0.9, 1.5, 1.2, 0.8, 0.4};
-
-  anchor_vec.emplace_back(anchor_2);
-  anchor_vec.emplace_back(anchor_3);
-  anchor_vec.emplace_back(anchor_4);
-
-  return anchor_vec;
-}
-
-TEST(TestConfFiltering, Hello) {
+/**
+ * @brief Tests the filtering of proposals based on confidence threshold.
+ */
+TEST(TestConfFiltering, SimpleConfFilteringTest) {
   AnchorMat test_input = create_sample_input();
   AnchorMat expected_ouput = conf_testing();
   auto [proposals, scores, anchor_inds] =
@@ -123,12 +100,15 @@ TEST(TestConfFiltering, Hello) {
   }
 }
 
-TEST(TestNMS3D, Hello) {
+/**
+ * @brief Tests the NMS3D function with a simple input.
+ */
+TEST(TestNMS3D, SimpleNMS3DTest) {
   AnchorMat test_input = create_sample_input();
   auto [proposals, scores, anchor_inds] =
       filter_proposals(test_input, 0.0, true);
   NMS test_obj(test_input, 0.2, true);
-  std::vector<int> keep = test_obj.nms_3d(proposals, scores, 0.2);
+  std::vector<int> keep = test_obj.nms_3d(proposals, scores);
   std::vector<int> expected_out_indices{3, 1, 5};
   ASSERT_EQ(keep.size(), expected_out_indices.size());
   for (int i = 0; i < expected_out_indices.size(); ++i) {
@@ -136,7 +116,10 @@ TEST(TestNMS3D, Hello) {
   }
 }
 
-TEST(TestFilterRows, Hello) {
+/**
+ * @brief Tests filtering rows based on given indices.
+ */
+TEST(TestFilterRows, SimpleRowFilteringTest) {
   std::vector<std::vector<float>> input_vec, expected_ouput;
 
   std::vector<float> x1{1.2, 1.5};
@@ -164,38 +147,17 @@ TEST(TestFilterRows, Hello) {
   }
 }
 
-std::vector<std::vector<float>> read_anchors_from_file(std::string path) {
+/**
+ * @brief Tests the full functionality of NMS using file inputs.
+ */
+TEST(TestFullFunctional, FullFunctionalityTest) {
 
-  std::vector<std::vector<float>> out_vec;
-  std::ifstream file(path);
-  std::string line;
-  std::vector<float> anchor;
-  while (std::getline(file, line)) {
-
-    float num_float = std::stof(line);
-    anchor.emplace_back(num_float);
-    if (anchor.size() == 86) {
-      out_vec.emplace_back(anchor);
-      anchor.clear();
-    }
-  }
-  std::cout << out_vec.size() << std::endl;
-  return out_vec;
-}
-
-TEST(TestFullFunctional, Hello) {
-
-  AnchorMat input_anchors = read_anchors_from_file(
-      "/home/sandhu/project/LaneSeg/Anchor3DLane/proposals.txt");
-  AnchorMat required_output = read_anchors_from_file(
-      "/home/sandhu/project/LaneSeg/Anchor3DLane/output.txt");
-  std::cout << required_output.size();
-  std::cout << input_anchors.size();
+  AnchorMat input_anchors = read_anchors_from_file("../proposals.txt");
+  AnchorMat required_output = read_anchors_from_file("../output.txt");
 
   NMS test_obj(input_anchors, 2.0, false);
   AnchorMat output = test_obj.nms();
-  std::cout << "output" << std::endl;
-  std::cout << required_output.size();
+  ASSERT_EQ(required_output.size(), output.size());
   for (int i = 0; i < required_output.size(); ++i) {
     for (int j = 0; j < (sizeof(i) / sizeof(float)); ++j) {
       ASSERT_EQ(required_output[i][j], output[i][j]);
