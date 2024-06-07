@@ -1,3 +1,12 @@
+/**
+ * @file utils.hpp
+ * @author vardeep singh sandhu
+ * @brief This file contains utils for the postprocess script
+ * @date 2024-06-07
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
