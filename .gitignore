@@ -22,3 +22,4 @@ proposals.txt
 cache_dense/
 .neptune/
 mmsegmentation.egg-info/
+*.pyc
