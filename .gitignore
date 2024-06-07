@@ -17,3 +17,7 @@ build/
 *.plan
 output.txt
 proposals.txt
+**/__pycache__/
+cache_dense/
+.neptune/
+mmsegmentation.egg-info/
