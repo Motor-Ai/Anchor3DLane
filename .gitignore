@@ -3,6 +3,7 @@ output/
 .venv/
 .vscode/
 .idea/
+*.pyc
 data.pickle
 data_2.pickle
 test.onnx
