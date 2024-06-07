@@ -166,9 +166,10 @@ def python_nms(proposals, nms_thres=0, conf_threshold=None, refine_vis=False, vi
         proposals = proposals[above_threshold]
         scores = scores[above_threshold]
         anchor_inds = anchor_inds[above_threshold]
-    
+
     if nms_thres > 0:
         keep = nms_3d(proposals, scores, thresh=nms_thres, anchor_len=20)
+        print(keep)
         proposals = proposals[keep]
         anchor_inds = anchor_inds[keep]
     return proposals
@@ -194,9 +195,16 @@ if __name__ == "__main__":
 
         # Python output
         python_out = python_nms(proposals[0], 2, 0.2, True, 0.5)
-        print(len(python_out))
+        # python_out = python_out.numpy().astype(np.float32).flatten()
+        # np.savetxt("output.txt", python_out, fmt='%1.4f')
+
+        print("python  ", len(python_out))
 
         # Proposals flattened for cpp
         proposals = proposals.numpy().astype(np.float32).flatten().tolist()
-        cpp_out = postprocess.nms(proposals, 2, 0.2, False, 0.5)
+        # np.savetxt("proposals.txt", proposals, fmt='%1.4f')
+        # np.printoptions(suppress=True)
         
+        nms = postprocess.NMS(proposals, 2, False)
+        cpp_out = nms.PerformNMS()
+        print(len(cpp_out))

@@ -15,3 +15,5 @@ torch2trt_dynamic/
 build/
 *.so
 *.plan
+output.txt
+proposals.txt
