@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import tracemalloc
 import copy
+from torch2trt_dynamic import module2trt, BuildEngineConfig, torch2trt_dynamic
 
 
 import mmcv
@@ -121,7 +122,6 @@ def main():
         cfg.merge_from_dict(args.cfg_options)
         
     model = build_lanedetector(cfg.model)
-    print('MODEL: ', model)
     model.init_weights()
 
     distributed = False
@@ -166,7 +166,6 @@ def main():
         data['gt_3dlanes'][i] = data['gt_3dlanes'][i].cpu()
 
     model.eval()
-    from functools import partial
 
     data_with_metas = (
     data['img'].cpu(),  # Include img_metas
@@ -175,22 +174,26 @@ def main():
     data['gt_3dlanes'],
     data['gt_project_matrix'].cpu())
     # Include other necessary keys from your original data dictionary
+    config_ = BuildEngineConfig(shape_ranges=dict(x=dict(min=(1, 86),
+                                                         opt=(3, 86),
+                                                         max=(10, 86),)))
+    trt_model = module2trt(model, 
+                           args=[*data_with_metas],
+                           config=config_)
 
-
-    with torch.no_grad():
-        torch.onnx.export(
-                model, data_with_metas,
-                "test.onnx",
-                input_names=['input'],
-                output_names=["output", "output_1"],
-                export_params=True,
-                keep_initializers_as_inputs=False,
-                verbose=True,
-                opset_version=16,
-                # dynamic_axes={"output_2": [0],
-                #               "output_3": [0],
-                #               "output_4": [0]}
-                              )
+    # with torch.no_grad():
+    #     torch.onnx.export(
+    #             model, data_with_metas,
+    #             "test.onnx",
+    #             input_names=['input'],
+    #             output_names=["output", "output_1", "output_2", "output_3", "output_4"],
+    #             export_params=True,
+    #             keep_initializers_as_inputs=False,
+    #             verbose=True,
+    #             opset_version=16,
+    #             dynamic_axes={"output_2": [0],
+    #                           "output_3": [0],
+    #                           "output_4": [0]})
     # breakpoint()
 
 

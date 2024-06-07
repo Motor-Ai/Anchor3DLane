@@ -13,7 +13,9 @@ def nms_3d(proposals, scores, vises, thresh, anchor_len=10):
     # proposals: [N, 35], scores: [N]
     order = scores.argsort(descending=True)
     keep = []
+    counter = 1
     while order.shape[0] > 0:
+        # if counter > 0.5:
         i = order[0]
         keep.append(i)
         x1 = proposals[i][5:5+anchor_len]  # [l]
@@ -28,7 +30,7 @@ def nms_3d(proposals, scores, vises, thresh, anchor_len=10):
         dis = (dis * matched + 1e-6).sum(dim=1) / (lengths + 1e-6)  # [n], incase no matched points
         inds = torch.where(dis > thresh)[0]  # [n']
         order = order[inds + 1]   # [n']
-
+        
     return torch.tensor(keep)
 
 if __name__ == '__main__':

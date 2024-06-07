@@ -411,9 +411,11 @@ def vis_anno(pickle_path):
     plt.savefig('../../output/openlane_test.png')
     
 def merge_annotations(anno_path, json_file):
-    print('make_annotations')
-    all_files = glob.glob(os.path.join(anno_path, 'seg*', '*.json'))
-    print('path', os.path.join(anno_path, 'seg*', '*.json'))
+    data = my_file.read() 
+    all_files = data.split("\n") 
+    # print('make_annotations')
+    # all_files = glob.glob(os.path.join(anno_path, 'seg*', '*.json'))
+    # print('path', os.path.join(anno_path, 'seg*', '*.json'))
     w = open(json_file, 'w')
     for idx, file_name in enumerate(all_files):
         with open(file_name, 'r') as f:
@@ -431,7 +433,7 @@ def generate_datalist(cache_path, data_list):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process Openlane dataset')
     parser.add_argument('data_root', help='root path of openlane dataset')
-    parser.add_argument('--merge', action='store_true', default=False, help='whether to merge the annotation json files')
+    parser.add_argument('--merge', action='store_true', default=True, help='whether to merge the annotation json files')
     parser.add_argument('--generate', action='store_true', default=False, help='whether to pickle files')
     args = parser.parse_args()
     if args.merge:

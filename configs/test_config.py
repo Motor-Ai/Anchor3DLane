@@ -4,7 +4,7 @@ anchor_len = len(anchor_y_steps)
 
 # dataset settings
 dataset_type = 'OpenlaneDataset'
-data_root = './data/OpenLane'
+data_root = 'data/OpenLane'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 input_size = (360, 480)
@@ -33,7 +33,7 @@ dataset_config = dict(
 )
 
 data = dict(
-    samples_per_gpu=16,
+    samples_per_gpu=1,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -46,7 +46,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         y_steps=anchor_y_steps,
-        data_list='validation.txt',
+        data_list='training.txt',
         dataset_config=dataset_config, 
         test_mode=True,
         pipeline=test_pipeline))
@@ -137,7 +137,7 @@ log_config = dict(
 # yapf:enable
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = None
+load_from = "work_dir/iter_80000.pth"
 resume_from = None
 workflow = [('train', 10000000)]
 cudnn_benchmark = True

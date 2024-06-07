@@ -17,6 +17,7 @@ from mmseg.apis import single_gpu_test
 from mmseg.datasets import build_dataloader, build_dataset
 from mmseg.models.segmentors.base import BaseSegmentor
 from mmseg.ops import resize
+# from testing.infer import TrtModel
 
 
 class ONNXRuntimeSegmentor(BaseSegmentor):
@@ -54,7 +55,9 @@ class ONNXRuntimeSegmentor(BaseSegmentor):
         for name in self.output_names:
             self.io_binding.bind_output(name)
         self.cfg = cfg
-        self.test_mode = cfg.model.test_cfg.mode
+        # self.test_mode = cfg.model.test_cfg.mode
+        self.test_mode = True
+        
         self.is_cuda_available = is_cuda_available
 
     def extract_feat(self, imgs):
@@ -114,8 +117,9 @@ class TensorRTSegmentor(BaseSegmentor):
         self.model = model
         self.device_id = device_id
         self.cfg = cfg
-        self.test_mode = cfg.model.test_cfg.mode
-
+        # self.test_mode = cfg.model.test_cfg.mode
+        self.test_mode = True
+        
     def extract_feat(self, imgs):
         raise NotImplementedError('This method is not implemented.')
 
@@ -127,11 +131,14 @@ class TensorRTSegmentor(BaseSegmentor):
 
     def simple_test(self, img: torch.Tensor, img_meta: Iterable,
                     **kwargs) -> list:
+        
         with torch.cuda.device(self.device_id), torch.no_grad():
             seg_pred = self.model({'input': img})['output']
         seg_pred = seg_pred.detach().cpu().numpy()
         # whole might support dynamic reshape
         ori_shape = img_meta[0]['ori_shape']
+        print("original image shape:: ", ori_shape)
+        
         if not (ori_shape[0] == seg_pred.shape[-2]
                 and ori_shape[1] == seg_pred.shape[-1]):
             seg_pred = torch.from_numpy(seg_pred).float()
@@ -262,8 +269,8 @@ def main():
     elif args.backend == 'tensorrt':
         model = TensorRTSegmentor(args.model, cfg=cfg, device_id=0)
 
-    model.CLASSES = dataset.CLASSES
-    model.PALETTE = dataset.PALETTE
+    # model.CLASSES = dataset.CLASSES
+    # model.PALETTE = dataset.PALETTE
 
     # clean gpu memory when starting a new evaluation.
     torch.cuda.empty_cache()
