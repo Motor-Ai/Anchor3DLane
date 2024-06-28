@@ -53,7 +53,7 @@ data = dict(
 
 # model setting
 model = dict(
-    type = 'Anchor3DLane',
+    type = 'Anchor3DLane_deploy',
     backbone=dict(
     type='ResNetV1c',
     depth=18,

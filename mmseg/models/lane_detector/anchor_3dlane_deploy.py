@@ -50,6 +50,7 @@ def custom_cumsum(input_, axis: int):
         raise ValueError("Axis value other than 1 is not supported")
     return output
 
+
 class DecodeLayer(nn.Module):
     def __init__(self, in_channel, mid_channel, out_channel):
         super(DecodeLayer, self).__init__()
@@ -58,38 +59,43 @@ class DecodeLayer(nn.Module):
             nn.ReLU6(),
             nn.Linear(mid_channel, mid_channel),
             nn.ReLU6(),
-            nn.Linear(mid_channel, out_channel))
+            nn.Linear(mid_channel, out_channel),
+        )
+
     def forward(self, x):
         return self.layer(x)
 
-@LANENET2S.register_module()
-class Anchor3DLane(BaseModule):
 
-    def __init__(self, 
-                 backbone,
-                 neck = None,
-                 pretrained = None,
-                 y_steps = [  5.,  10.,  15.,  20.,  30.,  40.,  50.,  60.,  80.,  100.],
-                 feat_y_steps = [  5.,  10.,  15.,  20.,  30.,  40.,  50.,  60.,  80.,  100.],
-                 anchor_cfg = None,
-                 db_cfg = None,
-                 backbone_dim = 512,
-                 attn_dim = None,
-                 iter_reg = 0,
-                 drop_out = 0.1,
-                 num_heads = None,
-                 enc_layers = 1,
-                 dim_feedforward = None,
-                 pre_norm = None,
-                 anchor_feat_channels = 64,
-                 feat_size = (48, 60),
-                 num_category = 21,
-                 loss_lane = None,
-                 loss_aux = None,
-                 init_cfg = None,
-                 train_cfg = None,
-                 test_cfg = None):
-        super(Anchor3DLane, self).__init__(init_cfg)
+@LANENET2S.register_module()
+class Anchor3DLane_deploy(BaseModule):
+
+    def __init__(
+        self,
+        backbone,
+        neck=None,
+        pretrained=None,
+        y_steps=[5.0, 10.0, 15.0, 20.0, 30.0, 40.0, 50.0, 60.0, 80.0, 100.0],
+        feat_y_steps=[5.0, 10.0, 15.0, 20.0, 30.0, 40.0, 50.0, 60.0, 80.0, 100.0],
+        anchor_cfg=None,
+        db_cfg=None,
+        backbone_dim=512,
+        attn_dim=None,
+        iter_reg=0,
+        drop_out=0.1,
+        num_heads=None,
+        enc_layers=1,
+        dim_feedforward=None,
+        pre_norm=None,
+        anchor_feat_channels=64,
+        feat_size=(48, 60),
+        num_category=21,
+        loss_lane=None,
+        loss_aux=None,
+        init_cfg=None,
+        train_cfg=None,
+        test_cfg=None,
+    ):
+        super(Anchor3DLane_deploy, self).__init__(init_cfg)
         assert loss_aux is None or len(loss_aux) == iter_reg
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -106,41 +112,75 @@ class Anchor3DLane(BaseModule):
         # Anchor
         self.y_steps = np.array(y_steps, dtype=np.float32)
         self.feat_y_steps = np.array(feat_y_steps, dtype=np.float32)
-        self.feat_sample_index = torch.from_numpy(np.isin(self.y_steps, self.feat_y_steps))
-        self.x_norm = 30.
-        self.y_norm = 100.
-        self.z_norm = 10.
+        self.feat_sample_index = torch.from_numpy(
+            np.isin(self.y_steps, self.feat_y_steps)
+        )
+        self.x_norm = 30.0
+        self.y_norm = 100.0
+        self.z_norm = 10.0
         self.x_min = -30
         self.x_max = 30
         self.anchor_len = len(y_steps)
         self.anchor_feat_len = len(feat_y_steps)
-        self.anchor_generator = AnchorGenerator(anchor_cfg, x_min=self.x_min, x_max=self.x_max, y_max=int(self.y_steps[-1]),
-                                                norm=(self.x_norm, self.y_norm, self.z_norm))
-        dense_anchors = self.anchor_generator.generate_anchors()  # [~4K, 305] ~(45*yaws*pitch)
-        anchor_inds = self.anchor_generator.y_steps   # [100]
-        self.anchors = self.sample_from_dense_anchors(self.y_steps, anchor_inds, dense_anchors)
-        self.feat_anchors = self.sample_from_dense_anchors(self.feat_y_steps, anchor_inds, dense_anchors)
-        self.xs, self.ys, self.zs = self.compute_anchor_cut_indices(self.feat_anchors, self.feat_y_steps)
+        self.anchor_generator = AnchorGenerator(
+            anchor_cfg,
+            x_min=self.x_min,
+            x_max=self.x_max,
+            y_max=int(self.y_steps[-1]),
+            norm=(self.x_norm, self.y_norm, self.z_norm),
+        )
+        dense_anchors = (
+            self.anchor_generator.generate_anchors()
+        )  # [~4K, 305] ~(45*yaws*pitch)
+        anchor_inds = self.anchor_generator.y_steps  # [100]
+        self.anchors = self.sample_from_dense_anchors(
+            self.y_steps, anchor_inds, dense_anchors
+        )
+        self.feat_anchors = self.sample_from_dense_anchors(
+            self.feat_y_steps, anchor_inds, dense_anchors
+        )
+        self.xs, self.ys, self.zs = self.compute_anchor_cut_indices(
+            self.feat_anchors, self.feat_y_steps
+        )
 
         if pretrained is not None:
-            assert backbone.get('pretrained') is None, \
-                'both backbone and segmentor set pretrained weight'
+            assert (
+                backbone.get("pretrained") is None
+            ), "both backbone and segmentor set pretrained weight"
             backbone.pretrained = pretrained
         self.backbone = build_backbone(backbone)
 
         # transformer layer
-        self.position_embedding = PositionEmbeddingSine(num_pos_feats=hidden_dim // 2, normalize=True)
-        self.input_proj = nn.Conv2d(backbone_dim, hidden_dim, kernel_size=1)  # the same as channel of self.layer4
+        self.position_embedding = PositionEmbeddingSine(
+            num_pos_feats=hidden_dim // 2, normalize=True
+        )
+        self.input_proj = nn.Conv2d(
+            backbone_dim, hidden_dim, kernel_size=1
+        )  # the same as channel of self.layer4
         if self.enc_layers == 1:
-            self.transformer_layer = TransformerEncoderLayer(hidden_dim, nhead=num_heads, dim_feedforward=dim_feedforward,
-                                    dropout=drop_out, normalize_before=pre_norm)
+            self.transformer_layer = TransformerEncoderLayer(
+                hidden_dim,
+                nhead=num_heads,
+                dim_feedforward=dim_feedforward,
+                dropout=drop_out,
+                normalize_before=pre_norm,
+            )
         else:
-            transformer_layer = TransformerEncoderLayer(hidden_dim, nhead=num_heads, dim_feedforward=dim_feedforward, \
-                dropout=drop_out, normalize_before=pre_norm)
-            self.transformer_layer = TransformerEncoder(transformer_layer, self.enc_layers)
-                                        
+            transformer_layer = TransformerEncoderLayer(
+                hidden_dim,
+                nhead=num_heads,
+                dim_feedforward=dim_feedforward,
+                dropout=drop_out,
+                normalize_before=pre_norm,
+            )
+            self.transformer_layer = TransformerEncoder(
+                transformer_layer, self.enc_layers
+            )
+
         # decoder heads
-        self.anchor_projection = nn.Conv2d(hidden_dim, self.anchor_feat_channels, kernel_size=1)
+        self.anchor_projection = nn.Conv2d(
+            hidden_dim, self.anchor_feat_channels, kernel_size=1
+        )
 
         # FPN
         if neck is not None:
@@ -153,10 +193,34 @@ class Anchor3DLane(BaseModule):
         self.reg_z_layer = nn.ModuleList()
         self.reg_vis_layer = nn.ModuleList()
 
-        self.cls_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels * self.anchor_feat_len, self.num_category))
-        self.reg_x_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels, self.anchor_len))
-        self.reg_z_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels, self.anchor_len))
-        self.reg_vis_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels, self.anchor_len))
+        self.cls_layer.append(
+            DecodeLayer(
+                self.anchor_feat_channels * self.anchor_feat_len,
+                self.anchor_feat_channels * self.anchor_feat_len,
+                self.num_category,
+            )
+        )
+        self.reg_x_layer.append(
+            DecodeLayer(
+                self.anchor_feat_channels * self.anchor_feat_len,
+                self.anchor_feat_channels,
+                self.anchor_len,
+            )
+        )
+        self.reg_z_layer.append(
+            DecodeLayer(
+                self.anchor_feat_channels * self.anchor_feat_len,
+                self.anchor_feat_channels,
+                self.anchor_len,
+            )
+        )
+        self.reg_vis_layer.append(
+            DecodeLayer(
+                self.anchor_feat_channels * self.anchor_feat_len,
+                self.anchor_feat_channels,
+                self.anchor_len,
+            )
+        )
 
         # build loss function
         self.lane_loss = build_loss(loss_lane)
@@ -167,12 +231,35 @@ class Anchor3DLane(BaseModule):
     def build_iterreg_layers(self):
         self.aux_loss = nn.ModuleList()
         for iter in range(self.iter_reg):
-            self.cls_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels * self.anchor_feat_len, self.num_category))
-            self.reg_x_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels, self.anchor_len))
-            self.reg_z_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels, self.anchor_len))
-            self.reg_vis_layer.append(DecodeLayer(self.anchor_feat_channels * self.anchor_feat_len, self.anchor_feat_channels, self.anchor_len))
+            self.cls_layer.append(
+                DecodeLayer(
+                    self.anchor_feat_channels * self.anchor_feat_len,
+                    self.anchor_feat_channels * self.anchor_feat_len,
+                    self.num_category,
+                )
+            )
+            self.reg_x_layer.append(
+                DecodeLayer(
+                    self.anchor_feat_channels * self.anchor_feat_len,
+                    self.anchor_feat_channels,
+                    self.anchor_len,
+                )
+            )
+            self.reg_z_layer.append(
+                DecodeLayer(
+                    self.anchor_feat_channels * self.anchor_feat_len,
+                    self.anchor_feat_channels,
+                    self.anchor_len,
+                )
+            )
+            self.reg_vis_layer.append(
+                DecodeLayer(
+                    self.anchor_feat_channels * self.anchor_feat_len,
+                    self.anchor_feat_channels,
+                    self.anchor_len,
+                )
+            )
             self.aux_loss.append(build_loss(self.loss_aux[iter]))
-        
 
     def sample_from_dense_anchors(self, sample_steps, dense_inds, dense_anchors):
         # self.y_steps, anchor_inds, desne_anchors
@@ -181,8 +268,14 @@ class Anchor3DLane(BaseModule):
         dense_anchor_len = len(sample_index)
         anchors = np.zeros((len(dense_anchors), 5 + anchor_len * 3), dtype=np.float32)
         anchors[:, :5] = dense_anchors[:, :5].copy()
-        anchors[:, 5:5+anchor_len] = dense_anchors[:, 5:5+dense_anchor_len][:, sample_index]    # [N, 20]
-        anchors[:, 5+anchor_len:5+2*anchor_len] = dense_anchors[:, 5+dense_anchor_len:5+2*dense_anchor_len][:, sample_index]    # [N, 20]
+        anchors[:, 5 : 5 + anchor_len] = dense_anchors[:, 5 : 5 + dense_anchor_len][
+            :, sample_index
+        ]  # [N, 20]
+        anchors[:, 5 + anchor_len : 5 + 2 * anchor_len] = dense_anchors[
+            :, 5 + dense_anchor_len : 5 + 2 * dense_anchor_len
+        ][
+            :, sample_index
+        ]  # [N, 20]
         anchors = torch.from_numpy(anchors)
         return anchors
 
@@ -196,27 +289,27 @@ class Anchor3DLane(BaseModule):
         num_y_steps = len(y_steps)
 
         # indexing
-        xs = anchors[..., 5:5 + num_y_steps]  # [N, l] or [B, N, l]
+        xs = anchors[..., 5 : 5 + num_y_steps]  # [N, l] or [B, N, l]
         xs = torch.flatten(xs, -2)  # [Nl] or [B, Nl]
 
-        ys = torch.from_numpy(y_steps).to(anchors.device)   # [l]
+        ys = torch.from_numpy(y_steps).to(anchors.device)  # [l]
         if len(anchors.shape) == 2:
             ys = ys.repeat(n_proposals)  # [Nl]
         else:
             ys = ys.repeat(batch_size, n_proposals)  # [B, Nl]
 
-        zs = anchors[..., 5 + num_y_steps:5 + num_y_steps * 2]  # [N, l]
+        zs = anchors[..., 5 + num_y_steps : 5 + num_y_steps * 2]  # [N, l]
         zs = torch.flatten(zs, -2)  # [Nl] or [B, Nl]
         return xs, ys, zs
 
     def projection_transform(self, Matrix, xs, ys, zs):
         # Matrix: [B, 3, 4], x, y, z: [B, NCl]
-        ones = torch.ones_like(zs)   # [B, NCl]
-        coordinates = torch.stack([xs, ys, zs, ones], dim=1)   # [B, 4, NCl]
-        trans = torch.bmm(Matrix, coordinates)   # [B, 3, NCl]
+        ones = torch.ones_like(zs)  # [B, NCl]
+        coordinates = torch.stack([xs, ys, zs, ones], dim=1)  # [B, 4, NCl]
+        trans = torch.bmm(Matrix, coordinates)  # [B, 3, NCl]
 
-        u_vals = trans[:, 0, :] / trans[:, 2, :]   # [B, NCl]
-        v_vals = trans[:, 1, :] / trans[:, 2, :]   # [B, NCl]
+        u_vals = trans[:, 0, :] / trans[:, 2, :]  # [B, NCl]
+        v_vals = trans[:, 1, :] / trans[:, 2, :]  # [B, NCl]
         return u_vals, v_vals
 
     def cut_anchor_features(self, features, h_g2feats, xs, ys, zs):
@@ -224,25 +317,35 @@ class Anchor3DLane(BaseModule):
         batch_size = features.shape[0]
 
         if len(xs.shape) == 1:
-            batch_xs = xs.repeat(batch_size, 1)   # [B, Nl]
-            batch_ys = ys.repeat(batch_size, 1)   # [B, Nl]
-            batch_zs = zs.repeat(batch_size, 1)   # [B, Nl]
+            batch_xs = xs.repeat(batch_size, 1)  # [B, Nl]
+            batch_ys = ys.repeat(batch_size, 1)  # [B, Nl]
+            batch_zs = zs.repeat(batch_size, 1)  # [B, Nl]
         else:
             batch_xs = xs
             batch_ys = ys
             batch_zs = zs
 
-        batch_us, batch_vs = self.projection_transform(h_g2feats, batch_xs, batch_ys, batch_zs)
-        batch_us = (batch_us / self.feat_size[1] - 0.5) * 2 #Scaling the 2d anchors so that we can project it to the feature space 
+        batch_us, batch_vs = self.projection_transform(
+            h_g2feats, batch_xs, batch_ys, batch_zs
+        )
+        batch_us = (
+            batch_us / self.feat_size[1] - 0.5
+        ) * 2  # Scaling the 2d anchors so that we can project it to the feature space
         batch_vs = (batch_vs / self.feat_size[0] - 0.5) * 2
 
         batch_grid = torch.stack([batch_us, batch_vs], dim=-1)  #
-        batch_grid = batch_grid.reshape(batch_size, -1, self.anchor_feat_len, 2)  # [B, N, l, 2]
-        batch_anchor_features = F.grid_sample(features, batch_grid, padding_mode='zeros')   # [B, C, N, l]
+        batch_grid = batch_grid.reshape(
+            batch_size, -1, self.anchor_feat_len, 2
+        )  # [B, N, l, 2]
+        batch_anchor_features = F.grid_sample(
+            features, batch_grid, padding_mode="zeros"
+        )  # [B, C, N, l]
 
         valid_mask = (batch_us > -1) & (batch_us < 1) & (batch_vs > -1) & (batch_vs < 1)
 
-        return batch_anchor_features, valid_mask.reshape(batch_size, -1, self.anchor_feat_len)
+        return batch_anchor_features, valid_mask.reshape(
+            batch_size, -1, self.anchor_feat_len
+        )
 
     def feature_extractor(self, img, mask):
         output = self.backbone(img)
@@ -252,61 +355,102 @@ class Anchor3DLane(BaseModule):
             feat = output[0]
         else:
             feat = output[-1]
-            
+
         feat = self.input_proj(feat)
-        mask_interp = F.interpolate(mask[:, 0, :, :][None], size=feat.shape[-2:]).to(torch.bool)[0]  # [B, h, w]
-        
-        pos = self.position_embedding(feat, mask_interp)   # [B, 32, h, w]
-        
+        mask_interp = F.interpolate(mask[:, 0, :, :][None], size=feat.shape[-2:]).to(
+            torch.bool
+        )[
+            0
+        ]  # [B, h, w]
+
+        pos = self.position_embedding(feat, mask_interp)  # [B, 32, h, w]
+
         # transformer forward
         bs, c, h, w = feat.shape
         assert h == self.feat_size[0] and w == self.feat_size[1]
         feat = feat.flatten(2).permute(2, 0, 1)  # [hw, bs, c]
-        pos = pos.flatten(2).permute(2, 0, 1)     # [hw, bs, 32]
-        mask_interp = mask_interp.flatten(1)      # [hw, bs]
-        trans_feat = self.transformer_layer(feat, src_key_padding_mask=mask_interp, pos=pos)  
+        pos = pos.flatten(2).permute(2, 0, 1)  # [hw, bs, 32]
+        mask_interp = mask_interp.flatten(1)  # [hw, bs]
+        trans_feat = self.transformer_layer(
+            feat, src_key_padding_mask=mask_interp, pos=pos
+        )
         trans_feat = trans_feat.permute(1, 2, 0).reshape(bs, c, h, w)  # [bs, c, h, w]
 
         return trans_feat
 
     @force_fp32()
-    def get_proposals(self, project_matrixes, anchor_feat, iter_idx=0, proposals_prev=None):
+    def get_proposals(
+        self, project_matrixes, anchor_feat, iter_idx=0, proposals_prev=None
+    ):
         batch_size = project_matrixes.shape[0]
         if proposals_prev is None:
-            batch_anchor_features, _ = self.cut_anchor_features(anchor_feat, project_matrixes, self.xs, self.ys, self.zs)   # [B, C, N, l]
+            batch_anchor_features, _ = self.cut_anchor_features(
+                anchor_feat, project_matrixes, self.xs, self.ys, self.zs
+            )  # [B, C, N, l]
         else:
-            sampled_anchor = torch.zeros(batch_size, len(self.anchors), 5 + self.anchor_feat_len * 3, device = anchor_feat.device)
-            sampled_anchor[:, :, 5:5+self.anchor_feat_len] = proposals_prev[:, :, 5:5+self.anchor_len][:, :, self.feat_sample_index]
-            sampled_anchor[:, :, 5+self.anchor_feat_len:5+self.anchor_feat_len*2] = proposals_prev[:, :, 5+self.anchor_len:5+self.anchor_len*2][:, :, self.feat_sample_index]
-            xs, ys, zs = self.compute_anchor_cut_indices(sampled_anchor, self.feat_y_steps)
-            batch_anchor_features, _ = self.cut_anchor_features(anchor_feat, project_matrixes, xs, ys, zs)   # [B, C, N, l]
-    
+            sampled_anchor = torch.zeros(
+                batch_size,
+                len(self.anchors),
+                5 + self.anchor_feat_len * 3,
+                device=anchor_feat.device,
+            )
+            sampled_anchor[:, :, 5 : 5 + self.anchor_feat_len] = proposals_prev[
+                :, :, 5 : 5 + self.anchor_len
+            ][:, :, self.feat_sample_index]
+            sampled_anchor[
+                :, :, 5 + self.anchor_feat_len : 5 + self.anchor_feat_len * 2
+            ] = proposals_prev[:, :, 5 + self.anchor_len : 5 + self.anchor_len * 2][
+                :, :, self.feat_sample_index
+            ]
+            xs, ys, zs = self.compute_anchor_cut_indices(
+                sampled_anchor, self.feat_y_steps
+            )
+            batch_anchor_features, _ = self.cut_anchor_features(
+                anchor_feat, project_matrixes, xs, ys, zs
+            )  # [B, C, N, l]
+
         batch_anchor_features = batch_anchor_features.transpose(1, 2)  # [B, N, C, l]
-        batch_anchor_features = batch_anchor_features.reshape(-1, self.anchor_feat_channels * self.anchor_feat_len)  # [B * N, C * l]
+        batch_anchor_features = batch_anchor_features.reshape(
+            -1, self.anchor_feat_channels * self.anchor_feat_len
+        )  # [B * N, C * l]
 
         # Predict
-        cls_logits = self.cls_layer[iter_idx](batch_anchor_features)   # [B * N, C]
-        cls_logits = cls_logits.reshape(batch_size, -1, cls_logits.shape[1])   # [B, N, C]
-        reg_x = self.reg_x_layer[iter_idx](batch_anchor_features)    # [B * N, l]
-        reg_x = reg_x.reshape(batch_size, -1, reg_x.shape[1])   # [B, N, l]
-        reg_z = self.reg_z_layer[iter_idx](batch_anchor_features)    # [B * N, l]
-        reg_z = reg_z.reshape(batch_size, -1, reg_z.shape[1])   # [B, N, l]
+        cls_logits = self.cls_layer[iter_idx](batch_anchor_features)  # [B * N, C]
+        cls_logits = cls_logits.reshape(
+            batch_size, -1, cls_logits.shape[1]
+        )  # [B, N, C]
+        reg_x = self.reg_x_layer[iter_idx](batch_anchor_features)  # [B * N, l]
+        reg_x = reg_x.reshape(batch_size, -1, reg_x.shape[1])  # [B, N, l]
+        reg_z = self.reg_z_layer[iter_idx](batch_anchor_features)  # [B * N, l]
+        reg_z = reg_z.reshape(batch_size, -1, reg_z.shape[1])  # [B, N, l]
         reg_vis = self.reg_vis_layer[iter_idx](batch_anchor_features)  # [B * N, l]
         reg_vis = torch.sigmoid(reg_vis)
-        reg_vis = reg_vis.reshape(batch_size, -1, reg_vis.shape[1])   # [B, N, l]
-        
+        reg_vis = reg_vis.reshape(batch_size, -1, reg_vis.shape[1])  # [B, N, l]
+
         # Add offsets to anchors
         # [B, N, l]
-        reg_proposals = torch.zeros(batch_size, len(self.anchors), 5 + self.anchor_len * 3 + self.num_category, device = project_matrixes.device)
+        reg_proposals = torch.zeros(
+            batch_size,
+            len(self.anchors),
+            5 + self.anchor_len * 3 + self.num_category,
+            device=project_matrixes.device,
+        )
         if proposals_prev is None:
-            reg_proposals[:, :, :5+self.anchor_len*3] = reg_proposals[:, :, :5+self.anchor_len*3] + self.anchors
+            reg_proposals[:, :, : 5 + self.anchor_len * 3] = (
+                reg_proposals[:, :, : 5 + self.anchor_len * 3] + self.anchors
+            )
         else:
-            reg_proposals[:, :, :5+self.anchor_len*3] = reg_proposals[:, :, :5+self.anchor_len*3] + proposals_prev[:, :, :5+self.anchor_len*3]
-        
-        reg_proposals[:, :, 5:5+self.anchor_len] += reg_x
-        reg_proposals[:, :, 5+self.anchor_len:5+self.anchor_len*2] += reg_z
-        reg_proposals[:, :, 5+self.anchor_len*2:5+self.anchor_len*3] = reg_vis
-        reg_proposals[:, :, 5+self.anchor_len*3:5+self.anchor_len*3+self.num_category] = cls_logits   # [B, N, C]
+            reg_proposals[:, :, : 5 + self.anchor_len * 3] = (
+                reg_proposals[:, :, : 5 + self.anchor_len * 3]
+                + proposals_prev[:, :, : 5 + self.anchor_len * 3]
+            )
+
+        reg_proposals[:, :, 5 : 5 + self.anchor_len] += reg_x
+        reg_proposals[:, :, 5 + self.anchor_len : 5 + self.anchor_len * 2] += reg_z
+        reg_proposals[:, :, 5 + self.anchor_len * 2 : 5 + self.anchor_len * 3] = reg_vis
+        reg_proposals[
+            :, :, 5 + self.anchor_len * 3 : 5 + self.anchor_len * 3 + self.num_category
+        ] = cls_logits  # [B, N, C]
         return reg_proposals
 
     def encoder_decoder(self, img, mask, gt_project_matrix, **kwargs):
@@ -314,10 +458,12 @@ class Anchor3DLane(BaseModule):
         batch_size = img.shape[0]
         trans_feat = self.feature_extractor(img, mask)
 
-        # anchor 
+        # anchor
         anchor_feat = self.anchor_projection(trans_feat)
-        project_matrixes = self.obtain_projection_matrix(gt_project_matrix, self.feat_size)
-        project_matrixes = torch.stack(project_matrixes, dim=0)   # [B, 3, 4]
+        project_matrixes = self.obtain_projection_matrix(
+            gt_project_matrix, self.feat_size
+        )
+        project_matrixes = torch.stack(project_matrixes, dim=0)  # [B, 3, 4]
 
         reg_proposals_all = []
         anchors_all = []
@@ -327,21 +473,27 @@ class Anchor3DLane(BaseModule):
 
         for iter in range(self.iter_reg):
             proposals_prev = reg_proposals_all[iter]
-            reg_proposals_all.append(self.get_proposals(project_matrixes, anchor_feat, iter+1, proposals_prev))
-            anchors_all.append(proposals_prev[:, :, :5+self.anchor_len*3])
+            reg_proposals_all.append(
+                self.get_proposals(
+                    project_matrixes, anchor_feat, iter + 1, proposals_prev
+                )
+            )
+            anchors_all.append(proposals_prev[:, :, : 5 + self.anchor_len * 3])
 
-        proposals_list = self.nms(reg_proposals_all[-1][0], anchors_all[-1][0], self.test_cfg.nms_thres, 
-                                  self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
-                                  vis_thresh=self.test_cfg.vis_thresh)
+        # proposals_list = self.nms(reg_proposals_all[-1][0], anchors_all[-1][0], self.test_cfg.nms_thres,
+        #                           self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
+        #                           vis_thresh=self.test_cfg.vis_thresh)
 
-        output = {'reg_proposals':reg_proposals_all[-1], 'proposals_list': proposals_list}
-        
+        output = {"reg_proposals": reg_proposals_all[-1], "anchors": anchors_all[-1]}
+
         if self.iter_reg > 0:
-            output_aux = {'reg_proposals':reg_proposals_all[:-1], 'anchors':anchors_all[:-1]}
+            output_aux = {
+                "reg_proposals": reg_proposals_all[:-1],
+                "anchors": anchors_all[:-1],
+            }
             return output, output_aux
-        
+
         return output, None
-        
 
     def obtain_projection_matrix(self, project_matrix, feat_size):
         """
@@ -357,59 +509,102 @@ class Anchor3DLane(BaseModule):
         project_matrix = project_matrix.cpu().numpy()
         for i in range(len(project_matrix)):
             P_g2im = project_matrix[i]
-            Hc = homography_crop_resize((self.db_cfg.org_h, self.db_cfg.org_w), 0, feat_size)
+            Hc = homography_crop_resize(
+                (self.db_cfg.org_h, self.db_cfg.org_w), 0, feat_size
+            )
             h_g2feat = np.matmul(Hc, P_g2im)
-            h_g2feats.append(torch.from_numpy(h_g2feat).type(torch.FloatTensor).to(device))
+            h_g2feats.append(
+                torch.from_numpy(h_g2feat).type(torch.FloatTensor).to(device)
+            )
         return h_g2feats
-    
-    def nms(self, proposals, batch_anchors, nms_thres=0, conf_threshold=None, refine_vis=False, vis_thresh=0.5):
+
+    def nms(
+        self,
+        proposals,
+        batch_anchors,
+        nms_thres=0,
+        conf_threshold=None,
+        refine_vis=False,
+        vis_thresh=0.5,
+    ):
         softmax = nn.Softmax(dim=1)
         proposals_list = torch.zeros(128, 86)
-        
+
         # for proposals in batch_proposals:
         anchor_inds = torch.arange(proposals.shape[0], device=proposals.device)
         # The gradients do not have to (and can't) be calculated for the NMS procedure
         # apply nms
-        scores = 1 - softmax(proposals[:, 5 + self.anchor_len * 3:5 + self.anchor_len * 3+self.num_category])[:, 0]  # pos_score  # for debug
-        
+        scores = (
+            1
+            - softmax(
+                proposals[
+                    :,
+                    5
+                    + self.anchor_len * 3 : 5
+                    + self.anchor_len * 3
+                    + self.num_category,
+                ]
+            )[:, 0]
+        )  # pos_score  # for debug
+
         above_threshold = scores > conf_threshold
         proposals = proposals[above_threshold]
         scores = scores[above_threshold]
         anchor_inds = anchor_inds[above_threshold]
-        
-        vises = proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] >= vis_thresh  # need check  #[N, l]
-        flag_l = custom_cumsum(input_= vises.double(), axis=1)
-        flag_r = custom_cumsum(input_=vises.flip(dims=[1]).double(), axis=1).flip(dims=[1])
-        
+
+        vises = (
+            proposals[:, 5 + self.anchor_len * 2 : 5 + self.anchor_len * 3]
+            >= vis_thresh
+        )  # need check  #[N, l]
+        flag_l = custom_cumsum(input_=vises.double(), axis=1)
+        flag_r = custom_cumsum(input_=vises.flip(dims=[1]).double(), axis=1).flip(
+            dims=[1]
+        )
+
         refined_vises = (flag_l > 0) & (flag_r > 0)
-        
-        proposals[:, 5 + self.anchor_len * 2:5 + self.anchor_len * 3] = refined_vises
-        keep = nms_3d(proposals, scores, refined_vises, thresh=nms_thres, anchor_len=self.anchor_len)
+
+        proposals[:, 5 + self.anchor_len * 2 : 5 + self.anchor_len * 3] = refined_vises
+        keep = nms_3d(
+            proposals,
+            scores,
+            refined_vises,
+            thresh=nms_thres,
+            anchor_len=self.anchor_len,
+        )
         proposals = proposals[keep]
-        
+
         anchor_inds = anchor_inds[keep]
         num_tensor = proposals.shape[0]
         idx = torch.arange(num_tensor, device=proposals.device)
         proposals_list[idx] = proposals[idx]
-            
+
         return proposals_list
 
-    def forward_dummy(self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs):
+    def forward_dummy(
+        self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs
+    ):
         mask = img.new_zeros((img.shape[0], 1, img.shape[2], img.shape[3]))
         gt_project_matrix = img.new_zeros((img.shape[0], 3, 4))
         output, _ = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
         return output
 
-    def forward_test(self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs):
+    def forward_test(
+        self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs
+    ):
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, _ = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-        
-        proposals_list = self.nms(output['reg_proposals'], output['anchors'], self.test_cfg.nms_thres, 
-                                  self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
-                                  vis_thresh=self.test_cfg.vis_thresh)
-        output['proposals_list'] = proposals_list
+
+        proposals_list = self.nms(
+            output["reg_proposals"],
+            output["anchors"],
+            self.test_cfg.nms_thres,
+            self.test_cfg.conf_threshold,
+            refine_vis=self.test_cfg.refine_vis,
+            vis_thresh=self.test_cfg.vis_thresh,
+        )
+        output["proposals_list"] = proposals_list
         return output
-    
+
     # def forward(self, img, img_metas, mask=None, return_loss=True, **kwargs):
     #     """Calls either :func:`forward_train` or :func:`forward_test` depending
     #     on whether ``return_loss`` is ``True``.
@@ -424,8 +619,10 @@ class Anchor3DLane(BaseModule):
     #         return self.forward_train(img, mask, img_metas, **kwargs)
     #     else:
     #         return self.forward_test(img, mask, img_metas, **kwargs)
-    
-    def forward(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs):
+
+    def forward(
+        self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs
+    ):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
 
@@ -435,11 +632,21 @@ class Anchor3DLane(BaseModule):
         should be double nested (i.e.  List[Tensor], List[List[dict]]), with
         the outer list indicating test time augmentations.
         """
-        
-        gt_project_matrix = gt_project_matrix.squeeze(1)
-        output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
-        return output
 
+        gt_project_matrix = gt_project_matrix.squeeze(1)
+        output, output_aux = self.encoder_decoder(
+            img, mask, gt_project_matrix, **kwargs
+        )
+        # proposals_list = self.nms(
+        #     output["reg_proposals"],
+        #     output["anchors"],
+        #     self.test_cfg.nms_thres,
+        #     self.test_cfg.conf_threshold,
+        #     refine_vis=self.test_cfg.refine_vis,
+        #     vis_thresh=self.test_cfg.vis_thresh,
+        # )
+        # output["proposals_list"] = proposals_list
+        return output
 
     @force_fp32()
     def loss(self, output, gt_3dlanes, output_aux=None):
@@ -447,28 +654,37 @@ class Anchor3DLane(BaseModule):
 
         # postprocess
         proposals_list = []
-        for proposal, anchor in zip(output['reg_proposals'], output['anchors']):
+        for proposal, anchor in zip(output["reg_proposals"], output["anchors"]):
             proposals_list.append((proposal, anchor))
         anchor_losses = self.lane_loss(proposals_list, gt_3dlanes)
-        losses.update(anchor_losses['losses'])
-        
+        losses.update(anchor_losses["losses"])
+
         # auxiliary loss
         for iter in range(self.iter_reg):
             proposals_list_aux = []
-            for proposal, anchor in zip(output_aux['reg_proposals'][iter], output_aux['anchors'][iter]):
+            for proposal, anchor in zip(
+                output_aux["reg_proposals"][iter], output_aux["anchors"][iter]
+            ):
                 proposals_list_aux.append((proposal, anchor))
             anchor_losses_aux = self.aux_loss[iter](proposals_list_aux, gt_3dlanes)
-            for k, v in anchor_losses_aux['losses'].items():
-                if 'loss' in k:
-                    losses[k+str(iter)] = v
-                
+            for k, v in anchor_losses_aux["losses"].items():
+                if "loss" in k:
+                    losses[k + str(iter)] = v
+
         other_vars = {}
-        other_vars['batch_positives'] = anchor_losses['batch_positives']
-        other_vars['batch_negatives'] = anchor_losses['batch_negatives']
+        other_vars["batch_positives"] = anchor_losses["batch_positives"]
+        other_vars["batch_negatives"] = anchor_losses["batch_negatives"]
         return losses, other_vars
 
-    @auto_fp16(apply_to=('img', 'mask', ))
-    def forward_train(self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs): 
+    @auto_fp16(
+        apply_to=(
+            "img",
+            "mask",
+        )
+    )
+    def forward_train(
+        self, img, mask, img_metas, gt_3dlanes=None, gt_project_matrix=None, **kwargs
+    ):
         """Forward function for training.
 
         Args:
@@ -484,18 +700,20 @@ class Anchor3DLane(BaseModule):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        
+
         gt_project_matrix = gt_project_matrix.squeeze(1)
-        import time 
-        
+        import time
+
         start = time.time()
 
-        output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+        output, output_aux = self.encoder_decoder(
+            img, mask, gt_project_matrix, **kwargs
+        )
 
         end = time.time()
 
         print("Time taken for the entire thing: ", end - start)
-        
+
         # return output
         # gt_project_matrix = gt_project_matrix.squeeze(1)
         # output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
@@ -532,9 +750,8 @@ class Anchor3DLane(BaseModule):
         loss, log_vars = self._parse_losses(losses, other_vars)
 
         outputs = dict(
-            loss=loss,
-            log_vars=log_vars,
-            num_samples=data_batch['img'].shape[0])
+            loss=loss, log_vars=log_vars, num_samples=data_batch["img"].shape[0]
+        )
 
         return outputs
 
@@ -550,13 +767,12 @@ class Anchor3DLane(BaseModule):
 
         log_vars_ = dict()
         for loss_name, loss_value in log_vars.items():
-            k = loss_name + '_val'
+            k = loss_name + "_val"
             log_vars_[k] = loss_value
 
         outputs = dict(
-            loss=loss,
-            log_vars=log_vars_,
-            num_samples=len(data_batch['img_metas']))
+            loss=loss, log_vars=log_vars_, num_samples=len(data_batch["img_metas"])
+        )
 
         return outputs
 
@@ -582,10 +798,8 @@ class Anchor3DLane(BaseModule):
             elif isinstance(loss_value, list):
                 log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
             else:
-                raise TypeError(
-                    f'{loss_name} is not a tensor or list of tensors')
-        loss = sum(_value for _key, _value in log_vars.items()
-                   if 'loss' in _key)
+                raise TypeError(f"{loss_name} is not a tensor or list of tensors")
+        loss = sum(_value for _key, _value in log_vars.items() if "loss" in _key)
 
         # If the loss_vars has different length, raise assertion error
         # to prevent GPUs from infinite waiting.
@@ -594,13 +808,18 @@ class Anchor3DLane(BaseModule):
             # print("log_val_length before reduce:", log_var_length)
             dist.all_reduce(log_var_length)
             # print("log_val_length after reduce:", log_var_length)
-            message = (f'rank {dist.get_rank()}' +
-                       f' len(log_vars): {len(log_vars)}' + ' keys: ' +
-                       ','.join(log_vars.keys()) + '\n')
-            assert log_var_length == len(log_vars) * dist.get_world_size(), \
-                'loss log variables are different across GPUs!\n' + message
+            message = (
+                f"rank {dist.get_rank()}"
+                + f" len(log_vars): {len(log_vars)}"
+                + " keys: "
+                + ",".join(log_vars.keys())
+                + "\n"
+            )
+            assert log_var_length == len(log_vars) * dist.get_world_size(), (
+                "loss log variables are different across GPUs!\n" + message
+            )
 
-        log_vars['loss'] = loss
+        log_vars["loss"] = loss
         for loss_name, loss_value in log_vars.items():
             if isinstance(loss_value, int) or isinstance(loss_value, float):
                 continue
