@@ -23,7 +23,7 @@ class ThreshAssigner(object):
         self.neg_k = neg_k
 
     def match_proposals_with_targets(self, proposals, targets, **kwargs):
-        valid_targets = targets[targets[:, 1] > 0]
+        valid_targets = targets
         num_proposals = proposals.shape[0]   # [Np, 35], [pos_score, neg_score, start_y, end_y, length, x_coord, z_coord, vis]
         num_targets = valid_targets.shape[0]   # [Nt, 35], [1, 0, start_y, end_y, length, x_coord, z_coord, vis]
 

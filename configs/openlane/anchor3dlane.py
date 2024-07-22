@@ -24,7 +24,7 @@ test_pipeline = [
     dict(type='Normalize', **img_norm_cfg),
     dict(type='MaskGenerate', input_size=input_size),
     dict(type='LaneFormat'),
-    # dict(type='Collect', keys=['img', 'img_metas', 'gt_3dlanes', 'gt_project_matrix', 'mask']),
+    dict(type='Collect', keys=['img', 'img_metas', 'gt_3dlanes', 'gt_project_matrix', 'mask']),
 ]
 
 dataset_config = dict(
@@ -46,7 +46,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         y_steps=anchor_y_steps,
-        data_list='validation.txt',
+        data_list='inference.txt',
         dataset_config=dataset_config, 
         test_mode=True,
         pipeline=test_pipeline))
@@ -142,3 +142,9 @@ resume_from = None
 workflow = [('train', 10000000)]
 cudnn_benchmark = True
 work_dir = 'output/openlane/anchor3dlane'
+
+#neptune_logger
+log_to_neptune =False
+api_token = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI2Yjg0ODM5Zi1lZDhlLTQ2MTItOGM1Zi1mMGI3OTEzMjg2MjAifQ=="
+project = "anna.kopatko/Anchor3DLane"
+model_id = 'ZOD'

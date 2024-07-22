@@ -75,7 +75,7 @@ class OpenlaneDataset(Dataset):
         self.dataset_config = dataset_config
         self.data_list = os.path.join(data_root, 'data_lists', data_list)
         self.cache_dir = os.path.join(data_root, 'cache_dense')
-        self.eval_file = os.path.join(data_root, 'data_splits', 'validation.json')  
+        self.eval_file = os.path.join(data_root, 'data_splits', 'inference.json')  
         self.visibility = visibility
         self.no_cls = no_cls
         

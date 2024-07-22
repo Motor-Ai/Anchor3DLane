@@ -216,9 +216,9 @@ def extract_data_with_smoothing(data_root, anno_file, tar_path, max_lanes=20, te
                     anno['gt_camera_extrinsic'] = new_anno['gt_camera_extrinsic']
                     anno['gt_camera_intrinsic'] = new_anno['gt_camera_intrinsic']
                     anno['old_anno'] = new_anno['old_anno']
-                    pickle_path = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:-1]))
+                    pickle_path = os.path.join(tar_path, 'inference', anno['filename'].split('/')[2])
                     mmcv.mkdir_or_exist(pickle_path)
-                    pickle_file = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:]).replace('.jpg', '.pkl'))
+                    pickle_file = os.path.join(pickle_path, os.path.basename(anno['filename'])).replace('.jpg', '.pkl')
                     w = open(pickle_file, 'wb')
                     pickle.dump({'image_id':anno['filename'],
                                 'gt_3dlanes':anno['gt_3dlanes'],
@@ -298,9 +298,8 @@ def extract_data_with_smoothing(data_root, anno_file, tar_path, max_lanes=20, te
                     anno['gt_camera_extrinsic'] = new_anno['gt_camera_extrinsic']
                     anno['gt_camera_intrinsic'] = new_anno['gt_camera_intrinsic']
                     anno['old_anno'] = new_anno['old_anno']
-                    pickle_path = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:-1]))
                     mmcv.mkdir_or_exist(pickle_path)
-                    pickle_file = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:]).replace('.jpg', '.pkl'))
+                    pickle_file = os.path.join(pickle_path, os.path.basename(anno['filename'])).replace('.jpg', '.pkl')
                     w = open(pickle_file, 'wb')
                     pickle.dump({'image_id':anno['filename'],
                                 'gt_3dlanes':anno['gt_3dlanes'],
@@ -336,9 +335,10 @@ def extract_data_with_smoothing(data_root, anno_file, tar_path, max_lanes=20, te
             anno['gt_camera_extrinsic'] = new_anno['gt_camera_extrinsic']
             anno['gt_camera_intrinsic'] = new_anno['gt_camera_intrinsic']
             anno['old_anno'] = new_anno['old_anno']
-            pickle_path = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:-1]))
+            pickle_path = os.path.join(tar_path, 'inference', anno['filename'].split('/')[2])
             mmcv.mkdir_or_exist(pickle_path)
-            pickle_file = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:]).replace('.jpg', '.pkl'))
+            pickle_file = os.path.join(pickle_path, os.path.basename(anno['filename'])).replace('.jpg', '.pkl')
+            print(anno['filename'])
             w = open(pickle_file, 'wb')
             pickle.dump({'image_id':anno['filename'],
                         'gt_3dlanes':anno['gt_3dlanes'],
@@ -356,27 +356,7 @@ def extract_data_with_smoothing(data_root, anno_file, tar_path, max_lanes=20, te
             gc.collect()
             
             
-    
-    # print('Now transforming annotations...')
-    # print("total_len of old anno", len(old_annotations))
 
-    # for image_id, old_anno in old_annotations.items():
-    #     new_anno = transform_annotation(old_anno, max_lanes=max_lanes, anchor_len=200)
-    #     anno = {}
-    #     anno['filename'] = new_anno['path']
-    #     anno['gt_3dlanes'] = new_anno['gt_3dlanes']
-    #     anno['gt_camera_extrinsic'] = new_anno['gt_camera_extrinsic']
-    #     anno['gt_camera_intrinsic'] = new_anno['gt_camera_intrinsic']
-    #     anno['old_anno'] = new_anno['old_anno']
-    #     pickle_path = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:-1]))
-    #     mmcv.mkdir_or_exist(pickle_path)
-    #     pickle_file = os.path.join(tar_path, '/'.join(anno['filename'].split('/')[-3:]).replace('.jpg', '.pkl'))
-    #     w = open(pickle_file, 'wb')
-    #     pickle.dump({'image_id':anno['filename'],
-    #                  'gt_3dlanes':anno['gt_3dlanes'],
-    #                  'gt_camera_extrinsic':anno['gt_camera_extrinsic'],
-    #                  'gt_camera_intrinsic':anno['gt_camera_intrinsic']}, w)
-    #     w.close()
 
 def vis_anno(pickle_path):
     fig = plt.figure()
@@ -411,8 +391,6 @@ def vis_anno(pickle_path):
     plt.savefig('../../output/openlane_test.png')
     
 def merge_annotations(anno_path, json_file):
-    print('make_annotations')
-    all_files = glob.glob(os.path.join(anno_path, 'seg*', '*.json'))
     print('path', os.path.join(anno_path, 'seg*', '*.json'))
     w = open(json_file, 'w')
     for idx, file_name in enumerate(all_files):
@@ -430,7 +408,7 @@ def generate_datalist(cache_path, data_list):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process Openlane dataset')
-    parser.add_argument('data_root', help='root path of openlane dataset')
+    parser.add_argument('data_root', default = 'data/OpenLane', help='root path of openlane dataset')
     parser.add_argument('--merge', action='store_true', default=False, help='whether to merge the annotation json files')
     parser.add_argument('--generate', action='store_true', default=False, help='whether to pickle files')
     args = parser.parse_args()
@@ -440,6 +418,7 @@ if __name__ == '__main__':
         mmcv.mkdir_or_exist(os.path.join(args.data_root, 'data_splits'))
         merge_annotations(os.path.join(args.data_root, 'lane3d_1000', 'training'), os.path.join(args.data_root, 'data_splits', 'training.json'))
         merge_annotations(os.path.join(args.data_root, 'lane3d_1000', 'validation'), os.path.join(args.data_root, 'data_splits', 'validation.json'))
+        merge_annotations(os.path.join(args.data_root, 'lane3d_1000', 'test'), os.path.join(args.data_root, 'data_splits', 'test.json'))
     elif args.generate:
         # ori_json = os.path.join(args.data_root, 'data_splits', 'training.json')
         # tar_path = os.path.join(args.data_root, 'cache_dense')
@@ -447,7 +426,7 @@ if __name__ == '__main__':
         os.makedirs(data_list_path, exist_ok=True)
         # extract_data_with_smoothing(args.data_root, ori_json, tar_path=tar_path, test_mode=False)
         # generate_datalist(os.path.join(tar_path, 'training'), os.path.join(data_list_path, 'training.txt'))
-        ori_json = os.path.join(args.data_root, 'data_splits', 'validation.json')
-        tar_path = os.path.join(args.data_root, 'cache_dense')
+        ori_json = os.path.join(args.data_root, 'data_splits', 'inference.json')
+        tar_path = os.path.join(args.data_root, '_cache_dense')
         extract_data_with_smoothing(args.data_root, ori_json, tar_path=tar_path, test_mode=True)
-        generate_datalist(os.path.join(tar_path, 'validation'), os.path.join(data_list_path, 'validation.txt'))
+        # generate_datalist(os.path.join(tar_path, 'validation'), os.path.join(data_list_path, 'validation.txt'))

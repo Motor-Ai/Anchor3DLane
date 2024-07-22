@@ -70,8 +70,9 @@ class LaneVis(object):
                               14: 'others',
                               20: 'roadedge'}
 
-    def vis(self, gt, pred, save_dir, img_dir, img_name, prob_th=0.02):
-        img_path = os.path.join('data', img_name)
+    def vis(self, gt, pred, save_dir, img_dir, img_name, prob_th):
+        prob_th = 0.5
+        img_path = os.path.join(img_dir, 'single_frames', img_name)
         fig = plt.figure()
         ax1 = fig.add_subplot(131)
         ax2 = fig.add_subplot(132)
@@ -88,44 +89,42 @@ class LaneVis(object):
 
         # evaluate lanelines
         cam_extrinsics = np.array(gt['extrinsic'])
-        # Re-calculate extrinsic matrix based on ground coordinate
         R_vg = np.array([[0, 1, 0],
                             [-1, 0, 0],
                             [0, 0, 1]], dtype=float)
-        R_gc = np.array([[1, 0, 0],
-                            [0, 0, 1],
-                            [0, -1, 0]], dtype=float)
-        cam_extrinsics[:3, :3] = np.matmul(np.matmul(
-                                    np.matmul(np.linalg.inv(R_vg), cam_extrinsics[:3, :3]),
-                                        R_vg), R_gc)
-
+        cam_extrinsics[:3, :3] = np.matmul(
+                                        np.matmul(np.linalg.inv(R_vg), cam_extrinsics[:3, :3]),
+                                            R_vg)
         cam_extrinsics[0:2, 3] = 0.0
+        
+        # Re-calculate extrinsic matrix based on ground coordinate
 
         cam_intrinsics = gt['intrinsic']
         cam_intrinsics = np.array(cam_intrinsics)
         gt_lanes_packed = gt['lane_lines']
+        
 
         gt_lanes, gt_visibility, gt_category = [], [], []
         for j, gt_lane_packed in enumerate(gt_lanes_packed):
             # A GT lane can be either 2D or 3D
             # if a GT lane is 3D, the height is intact from 3D GT, so keep it intact here too
-            lane = np.array(gt_lane_packed['xyz'])
-            lane_visibility = np.ones(len(lane[0]))
-
+            lane = np.array(gt_lane_packed['xyz'])   # [3, num_p]
+            lane_visibility = np.array(gt_lane_packed['visibility'])  # [num_p]
+            # Coordinate convertion
             lane = np.vstack((lane, np.ones((1, lane.shape[1]))))
             cam_representation = np.linalg.inv(
                                     np.array([[0, 0, 1, 0],
                                                 [-1, 0, 0, 0],
                                                 [0, -1, 0, 0],
-                                                [0, 0, 0, 1]], dtype=float))
-
+                                                [0, 0, 0, 1]], dtype=np.float32))  # transformation from apollo camera to openlane camera
             lane = np.matmul(cam_extrinsics, np.matmul(cam_representation, lane))
-            lane = lane[0:3, :].T
+            lane = lane[0:3, :].T   # [N, 3]
+            lane = lane[np.argsort(lane[:, 1])]
 
             gt_lanes.append(lane)
             gt_visibility.append(lane_visibility)
             gt_category.append(gt_lane_packed['category'])
-
+        print("gt lanes len before:", len(gt_lanes))
         pred_category = [pred_category[k] for k, lane in enumerate(pred_lanes)
                         if lane[0, 1] < self.y_samples[-1] and lane[-1, 1] > self.y_samples[0]]
         pred_prob = [pred_prob[k] for k, lane in enumerate(pred_lanes)
@@ -150,12 +149,14 @@ class LaneVis(object):
 
         cnt_gt = len(gt_lanes)
         cnt_pred = len(pred_lanes)
-
+        
         P_g2im = projection_g2im_extrinsic(cam_extrinsics, cam_intrinsics)
         P_gt = np.matmul(self.H_crop, P_g2im)
+        
+
         img = cv2.imread(img_path)
         img = cv2.warpPerspective(img, self.H_crop, (self.resize_w, self.resize_h))
-        img = img.astype(float) / 255
+        img = img.astype(np.float) / 255
         
         H_ipm2g = cv2.getPerspectiveTransform(
             np.float32([[0, 0], [self.ipm_w - 1, 0], [0, self.ipm_h - 1], [self.ipm_w - 1, self.ipm_h - 1]]), 
@@ -165,7 +166,7 @@ class LaneVis(object):
         H_im2g = np.linalg.inv(H_g2im)
         H_im2ipm = np.linalg.inv(np.matmul(H_g2im, H_ipm2g))
         raw_img = cv2.imread(img_path)
-        raw_img = raw_img.astype(float) / 255
+        raw_img = raw_img.astype(np.float) / 255
         im_ipm = cv2.warpPerspective(raw_img, H_im2ipm, (self.ipm_w, self.ipm_h))
         im_ipm = np.clip(im_ipm, 0, 1)
 
@@ -196,11 +197,14 @@ class LaneVis(object):
             x_values, z_values, visibility_vec = resample_laneline_in_y(np.array(gt_lanes[i]), self.y_samples,
                                                                         out_vis=True)
             gt_lanes[i] = np.vstack([x_values, z_values]).T
+
             gt_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
                                                      np.logical_and(x_values <= self.x_max,
                                                                     np.logical_and(self.y_samples >= min_y,
                                                                                    self.y_samples <= max_y)))
             gt_visibility_mat[i, :] = np.logical_and(gt_visibility_mat[i, :], visibility_vec)
+            
+        print("gt lanes len after:", len(gt_lanes))
 
         for i in range(cnt_pred):
             x_values = pred_lanes[i][:, 0]
@@ -243,130 +247,6 @@ class LaneVis(object):
                 ax2.plot(x_ipm, y_ipm, 'white', lw=1, alpha=0.5)
                 ax3.plot(x_g, y_g, z_g, 'mediumturquoise', lw=3, alpha=0.8, label='pred')
                 ax3.plot(x_g, y_g, z_g, 'white', lw=1, alpha=0.5)
-            elif lane_cate == 3: # double-white-dash
-                ax1.plot(x_2d, y_2d, 'mediumorchid', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(x_ipm, y_ipm, 'mediumorchid', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(x_g, y_g, z_g, 'mediumorchid', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-            elif lane_cate == 4: # double-white-solid
-                ax1.plot(x_2d, y_2d, 'lightskyblue', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax2.plot(x_ipm, y_ipm, 'lightskyblue', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax3.plot(x_g, y_g, z_g, 'lightskyblue', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-            elif lane_cate == 5: # white-ldash-rsolid
-                ax1.plot(x_2d, y_2d, 'hotpink', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax2.plot(x_ipm, y_ipm, 'hotpink', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax3.plot(x_g, y_g, z_g, 'hotpink', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-            elif lane_cate == 6: # white-lsolid-rdash
-                ax1.plot(x_2d, y_2d, 'cornflowerblue', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(x_ipm, y_ipm, 'cornflowerblue', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(x_g, y_g, z_g, 'cornflowerblue', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-            elif lane_cate == 7: # yellow-dash
-                ax1.plot(x_2d, y_2d, 'lawngreen', lw=3, alpha=0.8)
-                ax1.plot(x_2d, y_2d, 'white', lw=1, alpha=0.8, linestyle=(0,(20,10)))
-                ax2.plot(x_ipm, y_ipm, 'lawngreen', lw=3, alpha=0.8)
-                ax2.plot(x_ipm, y_ipm, 'white', lw=1, alpha=0.8, linestyle=(0,(20,10)))
-                ax3.plot(x_g, y_g, z_g, 'lawngreen', lw=3, alpha=0.8)
-                ax3.plot(x_g, y_g, z_g, 'white', lw=1, alpha=0.8, linestyle=(0,(20,10)))
-            elif lane_cate == 8: # yellow-solid
-                ax1.plot(x_2d, y_2d, 'dodgerblue', lw=3, alpha=0.8)
-                ax1.plot(x_2d, y_2d, 'white', lw=1, alpha=0.5)
-                ax2.plot(x_ipm, y_ipm, 'dodgerblue', lw=3, alpha=0.8)
-                ax2.plot(x_ipm, y_ipm, 'white', lw=1, alpha=0.5)
-                ax3.plot(x_g, y_g, z_g, 'dodgerblue', lw=3, alpha=0.8)
-                ax3.plot(x_g, y_g, z_g, 'white', lw=1, alpha=0.5)
-            elif lane_cate == 9: # double-yellow-dash
-                ax1.plot(x_2d, y_2d, 'salmon', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(x_ipm, y_ipm, 'salmon', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(x_g, y_g, z_g, 'salmon', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-            elif lane_cate == 10: # double-yellow-solid
-                ax1.plot(x_2d, y_2d, 'lightcoral', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax2.plot(x_ipm, y_ipm, 'lightcoral', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax3.plot(x_g, y_g, z_g, 'lightcoral', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-            elif lane_cate == 11: # yellow-ldash-rsolid
-                ax1.plot(x_2d, y_2d, 'coral', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax2.plot(x_ipm, y_ipm, 'coral', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax3.plot(x_g, y_g, z_g, 'coral', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-            elif lane_cate == 12: # yellow-lsolid-rdash
-                ax1.plot(x_2d, y_2d, 'lightseagreen', lw=4, alpha=0.8, label='pred')
-                ax1.plot(np.array(x_2d)+0.15, y_2d, 'white', lw=0.5, alpha=1)
-                ax1.plot(np.array(x_2d)-0.15, y_2d, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax2.plot(x_ipm, y_ipm, 'lightseagreen', lw=4, alpha=0.8, label='pred')
-                ax2.plot(np.array(x_ipm)+0.15, y_ipm, 'white', lw=0.5, alpha=1)
-                ax2.plot(np.array(x_ipm)-0.15, y_ipm, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-                ax3.plot(x_g, y_g, z_g, 'lightseagreen', lw=4, alpha=0.8, label='pred')
-                ax3.plot(np.array(x_g)+0.15, y_g, z_g, 'white', lw=0.5, alpha=1)
-                ax3.plot(np.array(x_g)-0.15, y_g, z_g, 'white', lw=0.5, alpha=1, linestyle=(0,(20,10)))
-            elif lane_cate == 13: # fishbone
-                ax1.plot(x_2d, y_2d, 'royalblue', lw=3, alpha=0.8)
-                ax1.plot(x_2d, y_2d, 'white', lw=1, alpha=0.5)
-                ax2.plot(x_ipm, y_ipm, 'royalblue', lw=3, alpha=0.8)
-                ax2.plot(x_ipm, y_ipm, 'white', lw=1, alpha=0.5)
-                ax3.plot(x_g, y_g, z_g, 'royalblue', lw=3, alpha=0.8)
-                ax3.plot(x_g, y_g, z_g, 'white', lw=1, alpha=0.5)
-            elif lane_cate == 14: # others
-                ax1.plot(x_2d, y_2d, 'forestgreen', lw=3, alpha=0.8)
-                ax1.plot(x_2d, y_2d, 'white', lw=1, alpha=0.5)
-                ax2.plot(x_ipm, y_ipm, 'forestgreen', lw=3, alpha=0.8)
-                ax2.plot(x_ipm, y_ipm, 'white', lw=1, alpha=0.5)
-                ax3.plot(x_g, y_g, z_g, 'forestgreen', lw=3, alpha=0.8)
-                ax3.plot(x_g, y_g, z_g, 'white', lw=1, alpha=0.5)
-
-            elif lane_cate == 20 or lane_cate == 21: # road
-                ax1.plot(x_2d, y_2d, 'gold', lw=2, alpha=0.8)
-                ax1.plot(x_2d, y_2d, 'white', lw=1, alpha=0.5)
-                ax2.plot(x_ipm, y_ipm, 'gold', lw=2, alpha=0.8)
-                ax2.plot(x_ipm, y_ipm, 'white', lw=1, alpha=0.5)
-                ax3.plot(x_g, y_g, z_g, 'gold', lw=2, alpha=0.8)
-                ax3.plot(x_g, y_g, z_g, 'white', lw=1, alpha=0.5)
-            else:
-                ax1.plot(x_2d, y_2d, lw=3, alpha=0.8)
-                ax1.plot(x_2d, y_2d, 'white', lw=1, alpha=0.5)
-                ax2.plot(x_ipm, y_ipm, lw=3, alpha=0.8)
-                ax2.plot(x_ipm, y_ipm, 'white', lw=1, alpha=0.5)
-                ax3.plot(x_g, y_g, z_g, lw=3, alpha=0.8)
-                ax3.plot(x_g, y_g, z_g, 'white', lw=1, alpha=0.5)
-
         for i in range(cnt_gt):
             x_values = gt_lanes[i][:, 0]
             z_values = gt_lanes[i][:, 1]
@@ -410,11 +290,11 @@ class LaneVis(object):
         plt.close(fig)
 
 
-    def visualize(self, pred_file, gt_file, test_file=None, prob_th=0.5, img_dir=None, save_dir=None, vis_step=20):
+    def visualize(self, pred_file, gt_file, test_file=None, prob_th=0.27, img_dir=None, save_dir=None, vis_step=20):
         mmcv.mkdir_or_exist(save_dir)
         pred_lines = open(pred_file).readlines()
         json_pred = [json.loads(line) for line in pred_lines]
-        json_gt = [json.loads(line) for line in open(gt_file).readlines()]
+        json_gt = [json.loads(line) for line in open('data/zod_dataset/data_splits/inference.json').readlines()]
         if test_file is not None:
             test_list = [s.strip().split('.')[0] for s in open(test_file, 'r').readlines()]
             json_pred = [s  for s in json_pred if s['file_path'][:-4] in test_list]
@@ -423,9 +303,6 @@ class LaneVis(object):
             warnings.warn('We do not get the predictions of all the test tasks')
         gts = {l['file_path']: l for l in json_gt}
         for i, pred in tqdm(enumerate(json_pred)):
-            if i % vis_step > 0:
-                continue
             raw_file = pred['file_path']
-            raw_file = os.path.join('zod_dataset/single_frames', raw_file)
-            gt = gts[raw_file]
+            gt = gts[os.path.join('zod_dataset/single_frames', raw_file)]
             self.vis(gt, pred, save_dir, img_dir, raw_file, prob_th)

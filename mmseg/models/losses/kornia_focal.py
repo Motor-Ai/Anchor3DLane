@@ -16,7 +16,7 @@ def one_hot(labels: torch.Tensor,
 
     Args:
         labels (torch.Tensor) : tensor with labels of shape :math:`(N, *)`,
-                                where N is batch size. Each value is an integer
+                                where N is batch snumize. Each value is an integer
                                 representing correct classification.
         num_classes (int): number of classes in labels.
         device (Optional[torch.device]): the desired device of returned tensor.
@@ -80,9 +80,7 @@ def focal_loss(input: torch.Tensor,
     # compute softmax over the classes axis
     input_soft: torch.Tensor = F.softmax(input, dim=1) + eps  # [b, c, h, w]
 
-    # create the labels one hot tensor
-    target_one_hot: torch.Tensor = one_hot(target, num_classes=input.shape[1], device=input.device, dtype=input.dtype)  # [b, c, h, w]
-
+    target_one_hot: torch.Tensor = one_hot(target, num_classes=input.shape[1], device=input.device, dtype=input.dtype)
     # compute the actual focal loss
     weight = torch.pow(-input_soft + 1., gamma)   # (1-pred)^gamma
 

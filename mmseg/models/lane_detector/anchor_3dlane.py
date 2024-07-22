@@ -187,7 +187,7 @@ class Anchor3DLane(BaseModule):
             api_token=api_token, # your credentials
         )
             model_version_id = self.model_version["sys/id"].fetch()
-            self.model_version['model/config'].upload('configs/openlane/anchor3dlane.py')
+            self.model_version['model/config'].upload('configs/zod/anchor3dlane.py')
             self.model_version['model/parameters'] = parameters
             self.model_version['model/parameters/run_id'] = run_id
             self.neptune_logger["model/parameters/model_version_id"] = model_version_id
@@ -430,8 +430,15 @@ class Anchor3DLane(BaseModule):
     
 
     def forward_test(self, img, mask=None, img_metas=None, gt_project_matrix=None, **kwargs):
+        import json
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, _ = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+        output_json = {}
+        for key, value in output.items():
+            output_json[key] = np.array(value.cpu()).tolist()
+            
+        with open('inference_output.json', 'w') as f:
+            json.dump(output_json, f)
 
         proposals_list = self.nms(output['reg_proposals'], output['anchors'], self.test_cfg.nms_thres, 
                                   self.test_cfg.conf_threshold, refine_vis=self.test_cfg.refine_vis,
@@ -500,6 +507,10 @@ class Anchor3DLane(BaseModule):
         """
         gt_project_matrix = gt_project_matrix.squeeze(1)
         output, output_aux = self.encoder_decoder(img, mask, gt_project_matrix, **kwargs)
+        try:
+            losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
+        except Exception as e:
+            print(f"An error occurred: {gt_3dlanes}")
         losses, other_vars = self.loss(output, gt_3dlanes, output_aux)
         self.iter = self.iter + 1
         if self.neptune_logger:
@@ -550,6 +561,8 @@ class Anchor3DLane(BaseModule):
             num_samples=data_batch['img'].shape[0])
         if self.neptune_logger:
             self.neptune_logger["train/loss"].append(loss.item())
+            # self.neptune_logger["train/batch_positives"].append(losses[1]['batch_positives'])
+            # self.neptune_logger["train/batch_negatives"].append(losses[1]['batch_negatives'])
             for item, value in log_vars.items():
                 self.neptune_logger["train/"+item].append(value)
 
@@ -798,11 +811,15 @@ class Anchor3DLane(BaseModule):
         laneline_x_error_far = []
         laneline_z_error_close = []
         laneline_z_error_far = []
+        
+        average_conf_scores = []
         for i, pred in enumerate(results):
             pred_lanelines = pred['lane_lines'].copy()
             pred_lanes = [np.array(lane['xyz']) for i, lane in enumerate(pred_lanelines)]
             pred_category = [int(lane['category']) for i, lane in enumerate(pred_lanelines)]
             pred_laneLines_prob = [np.array(lane['laneLines_prob']) for i, lane in enumerate(pred_lanelines)]
+            average_conf_scores.append(np.average(np.array(pred_laneLines_prob)))
+            
 
             # filter out probability
             pred_lanes = [pred_lanes[ii] for ii in range(len(pred_laneLines_prob)) if
@@ -824,12 +841,9 @@ class Anchor3DLane(BaseModule):
             R_vg = np.array([[0, 1, 0],
                                 [-1, 0, 0],
                                 [0, 0, 1]], dtype=float)
-            R_gc = np.array([[1, 0, 0],
-                                [0, 0, 1],
-                                [0, -1, 0]], dtype=float)
-            cam_extrinsics[:3, :3] = np.matmul(np.matmul(
+            cam_extrinsics[:3, :3] = np.matmul(
                                         np.matmul(np.linalg.inv(R_vg), cam_extrinsics[:3, :3]),
-                                            R_vg), R_gc)
+                                            R_vg)
             gt_cam_height = cam_extrinsics[2, 3]
             gt_cam_pitch = 0
 
@@ -848,14 +862,16 @@ class Anchor3DLane(BaseModule):
                 lane = gt_lane_packed.cpu()
                 lane_visibility = np.array(gt['original_visibility'][i][j].cpu())
 
-                lane = np.vstack((lane, np.ones((1, lane.shape[1]))))
+                # lane = np.vstack((lane, np.ones((1, lane.shape[1]))))
                 cam_representation = np.linalg.inv(
                                         np.array([[0, 0, 1, 0],
                                                   [-1, 0, 0, 0],
                                                   [0, -1, 0, 0],
                                                   [0, 0, 0, 1]], dtype=float))
+                lane = np.vstack((lane, np.ones((1, lane.shape[1]))))
                 lane = np.matmul(cam_extrinsics, np.matmul(cam_representation, lane))
-                lane = lane[0:3, :].T
+                lane = lane[0:3, :].T   # [N, 3]
+                lane = lane[np.argsort(lane[:, 1])]
 
                 gt_lanes.append(lane)
                 gt_visibility.append(lane_visibility)
@@ -928,7 +944,7 @@ class Anchor3DLane(BaseModule):
         output_stats.append(np.sum(laneline_stats[:, 5]))   # 13
         
         output_dict = {"F_lane": F_lane, "R_lane": R_lane, "P_lane": P_lane, "C_lane": C_lane, "x_error_close_avg": x_error_close_avg, \
-            "x_error_far_avg": x_error_far_avg, "z_error_close_avg":z_error_close_avg, "z_error_far_avg":z_error_far_avg}
+            "x_error_far_avg": x_error_far_avg, "z_error_close_avg":z_error_close_avg, "z_error_far_avg":z_error_far_avg, "average_conf":sum(average_conf_scores)/len(average_conf_scores)}
 
         return output_dict
         
@@ -967,6 +983,9 @@ class Anchor3DLane(BaseModule):
             self.neptune_logger["val/loss"].append(loss.item())
             for item, value in log_vars.items():
                 self.neptune_logger["val/"+item].append(value)
+            self.neptune_logger["val/batch_positives"].append(losses[1]['batch_positives'])
+            self.neptune_logger["val/batch_negatives"].append(losses[1]['batch_negatives'])
+            self.neptune_logger["val/batch_negatives"]
 
         return outputs
 

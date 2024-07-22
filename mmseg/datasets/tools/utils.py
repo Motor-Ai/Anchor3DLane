@@ -925,7 +925,6 @@ def prune_3d_lane_by_range(lane_3d, x_min, x_max):
     # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
     lane_3d = lane_3d[np.logical_and(lane_3d[:, 1] > 0, lane_3d[:, 1] < 200), ...]
 
-    # remove lane points out of x range
     lane_3d = lane_3d[np.logical_and(lane_3d[:, 0] > x_min,
                                      lane_3d[:, 0] < x_max), ...]
     return lane_3d
@@ -943,8 +942,8 @@ def resample_laneline_in_y_lrj(input_lane, y_steps, out_vis=False):
     # at least two points are included
     assert(input_lane.shape[0] >= 2)
 
-    y_min = np.min(input_lane[:, 1])-5
-    y_max = np.max(input_lane[:, 1])+5
+    y_min = np.min(input_lane[:, 1])-1
+    y_max = np.max(input_lane[:, 1])+1
 
     if input_lane.shape[1] < 3:
         input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)

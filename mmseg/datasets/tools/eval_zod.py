@@ -262,7 +262,7 @@ class ZodEval(object):
                 print('eval:{}/{}'.format(i+1,len(json_pred)))
             if 'file_path' not in pred or 'lane_lines' not in pred:
                 raise Exception('file_path or lane_lines not in some predictions.')
-            raw_file = pred['file_path']
+            raw_file = os.path.join('zod_dataset/single_frames', pred['file_path'])
 
             ###
             pred_lanelines = pred['lane_lines'].copy()
@@ -277,7 +277,7 @@ class ZodEval(object):
                     pred_laneLines_prob[ii] > prob_th]
             pred_laneLines_prob = [pred_laneLines_prob[ii] for ii in range(len(pred_laneLines_prob)) if
                     pred_laneLines_prob[ii] > prob_th]
-            raw_file = os.path.join('zod_dataset/single_frames', raw_file)
+            raw_file = raw_file
             
             if raw_file not in gts:
                 print('Some raw_file from your predictions do not exist in the test tasks.', raw_file)
@@ -286,21 +286,17 @@ class ZodEval(object):
 
             # evaluate lanelines
             cam_extrinsics = np.array(gt['extrinsic'])
-            # Re-calculate extrinsic matrix based on ground coordinate
+             # Re-calculate extrinsic matrix based on ground coordinate
             R_vg = np.array([[0, 1, 0],
                                 [-1, 0, 0],
-                                [0, 0, 1]], dtype=float)
-            R_gc = np.array([[1, 0, 0],
-                                [0, 0, 1],
-                                [0, -1, 0]], dtype=float)
-            cam_extrinsics[:3, :3] = np.matmul(np.matmul(
+                                [0, 0, 1]], dtype=np.float32)
+            cam_extrinsics[:3, :3] = np.matmul(
                                         np.matmul(np.linalg.inv(R_vg), cam_extrinsics[:3, :3]),
-                                            R_vg), R_gc)
-            gt_cam_height = cam_extrinsics[2, 3]
-            gt_cam_pitch = 0
-
+                                            R_vg)
             cam_extrinsics[0:2, 3] = 0.0
-            # cam_extrinsics[2, 3] = gt_cam_height
+
+            # Re-calculate extrinsic matrix based on ground coordinate
+
 
             cam_intrinsics = gt['intrinsic']
             cam_intrinsics = np.array(cam_intrinsics)
@@ -316,21 +312,19 @@ class ZodEval(object):
                 # if a GT lane is 3D, the height is intact from 3D GT, so keep it intact here too
                 lane = np.array(gt_lane_packed['xyz'])
                 lane_visibility = np.array(gt_lane_packed['visibility'])
-
                 lane = np.vstack((lane, np.ones((1, lane.shape[1]))))
                 cam_representation = np.linalg.inv(
                                         np.array([[0, 0, 1, 0],
-                                                  [-1, 0, 0, 0],
-                                                  [0, -1, 0, 0],
-                                                  [0, 0, 0, 1]], dtype=float))
+                                                    [-1, 0, 0, 0],
+                                                    [0, -1, 0, 0],
+                                                    [0, 0, 0, 1]], dtype=np.float32))  # transformation from apollo camera to openlane camera
                 lane = np.matmul(cam_extrinsics, np.matmul(cam_representation, lane))
-                lane = lane[0:3, :].T
+                lane = lane[0:3, :].T   # [N, 3]
+                lane = lane[np.argsort(lane[:, 1])]
 
                 gt_lanes.append(lane)
                 gt_visibility.append(lane_visibility)
                 gt_category.append(gt_lane_packed['category'])
-            
-            P_g2im = projection_g2im_extrinsic(cam_extrinsics, cam_intrinsics)
 
 
             # N to N matching of lanelines

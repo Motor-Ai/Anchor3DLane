@@ -110,30 +110,30 @@ def test_openlane_multigpu(model,
     tmpdir = os.path.join(out_dir, 'tmp')
 
     model.eval()
-    results = []
-    dataset = data_loader.dataset
-    loader_indices = data_loader.batch_sampler
-    prob_th=model.module.test_cfg.test_conf
+    # results = []
+    # dataset = data_loader.dataset
+    # loader_indices = data_loader.batch_sampler
+    # prob_th=model.module.test_cfg.test_conf
 
-    pred_file = osp.join(out_dir, 'lane3d_prediction.json')
-    print("testing model...")
-    if rank == 0:
-        prog_bar = mmcv.ProgressBar(len(dataset))
-    for batch_indices, data in tqdm.tqdm(zip(loader_indices, data_loader)):
-        with torch.no_grad():
-            outputs= model(return_loss=False, **data)
-            for output in outputs['proposals_list']:
-                result = postprocess(output, anchor_len=dataset.anchor_len)
-                results.append(result)
-        if rank == 0:
-            batch_size = len(result) * world_size
-            for _ in range(batch_size):
-                prog_bar.update()
-    results = collect_results_cpu(results, len(dataset), tmpdir)
-    if rank == 0:
-        dataset.format_results(results, pred_file)
-    else:
-        return
+    # pred_file = osp.join(out_dir, 'lane3d_prediction.json')
+    # print("testing model...")
+    # if rank == 0:
+    #     prog_bar = mmcv.ProgressBar(len(dataset))
+    # for batch_indices, data in tqdm.tqdm(zip(loader_indices, data_loader)):
+    #     with torch.no_grad():
+    #         outputs= model(return_loss=False, **data)
+    #         for output in outputs['proposals_list']:
+    #             result = postprocess(output, anchor_len=dataset.anchor_len)
+    #             results.append(result)
+    #     if rank == 0:
+    #         batch_size = len(result) * world_size
+    #         for _ in range(batch_size):
+    #             prog_bar.update()
+    # results = collect_results_cpu(results, len(dataset), tmpdir)
+    # if rank == 0:
+    #     dataset.format_results(results, pred_file)
+    # else:
+    #     return
 
     # evaluating
     if eval:

@@ -1,4 +1,7 @@
 data/
+image_output_openlane/
+image_output_zod/
+random_utils.py
 output/
 .venv/
 .vscode/

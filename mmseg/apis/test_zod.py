@@ -64,7 +64,7 @@ def test_zod(model,
     # evaluating
     if eval:
         print("evaluating results...")
-        test_result = dataset.eval(pred_file, prob_th=0.02)
+        test_result = dataset.eval(pred_file, prob_th=0.2)
         print("===> Evaluation on validation set: \n"   
                 "laneline F-measure {:.4} \n"
                 "laneline Recall  {:.4} \n"
@@ -88,7 +88,7 @@ def test_zod(model,
         print("visualizing results at", save_dir)
         visualizer = LaneVis(dataset)
         visualizer.visualize(pred_file, gt_file = dataset.eval_file, img_dir = dataset.data_root, test_file=dataset.test_list, 
-                            save_dir = save_dir, prob_th=prob_th)
+                            save_dir = save_dir, prob_th=0.5)
         
 def test_zod_multigpu(model,
                            data_loader,
@@ -163,5 +163,5 @@ def test_zod_multigpu(model,
         mmcv.mkdir_or_exist(save_dir)
         print("visualizing results at", save_dir)
         visualizer = LaneVis(dataset)
-        visualizer.visualize(pred_file, gt_file = dataset.eval_file, img_dir = dataset.data_root, test_file=dataset.test_list, 
-                            save_dir = save_dir, prob_th=prob_th)
+        visualizer.visualize(pred_file, gt_file = 'data/zod_dataset/data_splits/inference.json', img_dir = dataset.data_root, test_file=dataset.test_list, 
+                            save_dir = save_dir, prob_th=0.5)

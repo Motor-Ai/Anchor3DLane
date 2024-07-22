@@ -28,7 +28,7 @@ test_pipeline = [
 ]
 
 dataset_config = dict(
-    max_lanes = 10,
+    max_lanes = 19,
     input_size = input_size,
 )
 
@@ -50,6 +50,7 @@ data = dict(
         dataset_config=dataset_config, 
         test_mode=True,
         pipeline=test_pipeline))
+
 
 # model setting
 model = dict(
@@ -79,6 +80,7 @@ model = dict(
         pitch = 3,
         cam_height = 1.55,
         crop_y = 0,
+        K = [[2015., 0., 960.], [0., 2015., 540.], [0., 0., 1.]],
         top_view_region = [[-10, 103], [10, 103], [-10, 3], [10, 3]],
         max_2dpoints = 10,
     ),
@@ -88,7 +90,8 @@ model = dict(
     dim_feedforward = 128,
     pre_norm = False,
     feat_size = (45, 60),
-    num_category = 6,
+    num_category = 4,
+    iter_reg = 1,
     loss_lane = dict(
         type = 'LaneLoss',
         loss_weights = dict(cls_loss = 1,
@@ -104,14 +107,31 @@ model = dict(
         ),
         anchor_len = anchor_len,
         anchor_steps=anchor_y_steps,
+        anchor_assign=False,
     ),
+    loss_aux = [dict(
+        type = 'LaneLoss',
+        loss_weights = dict(cls_loss = 1,
+                            reg_losses_x = 1,
+                            reg_losses_z = 1,
+                            reg_losses_vis = 1),
+        assign_cfg = dict(
+            type = 'TopkAssigner',
+            pos_k = 3,
+            neg_k = 450,
+            anchor_len = anchor_len,
+            metric = 'Euclidean'
+        ),
+        anchor_len = anchor_len,
+        anchor_steps=anchor_y_steps,
+    ),],
     train_cfg = dict(
         nms_thres = 0,
         conf_threshold = 0),
     test_cfg = dict(
         nms_thres = 2,
         conf_threshold = 0.2,
-        test_conf = 0.5,
+        test_conf = 0.38,
         refine_vis = True,
         vis_thresh = 0.5
     )
@@ -119,26 +139,20 @@ model = dict(
 
 # training setting
 data_shuffle = True
-optimizer = dict(type='Adam', lr=2e-3)
+optimizer = dict(type='Adam', lr=2e-4)
 optimizer_config = dict()
 
 # learning policy
 lr_config = dict(policy='step', step=[50000,], by_epoch=False)
-runner = dict(type='IterBasedRunner', max_iters=160000)
-checkpoint_config = dict(by_epoch=False, interval=10000)
+runner = dict(type='IterBasedRunner', max_iters=60000)
+checkpoint_config = dict(by_epoch=False, interval=5000)
 
 log_config = dict(
     interval=10,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
+        dict(type='TensorboardLoggerHook')
     ])
-
-#neptune_logger
-log_to_neptune =True
-api_token = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI2Yjg0ODM5Zi1lZDhlLTQ2MTItOGM1Zi1mMGI3OTEzMjg2MjAifQ=="
-project = "anna.kopatko/Anchor3DLane"
-model_id = 'ZOD'
-
 # yapf:enable
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
@@ -146,8 +160,8 @@ load_from = None
 resume_from = None
 workflow = [('train', 5), ('val', 1)]
 cudnn_benchmark = True
-work_dir = 'output/zod/anchor3dlane'
-
+# load_from = 'pretrained/openlane_anchor3dlane.pth'
+work_dir = 'output/zod/anchor3dlane_2stage'
 #neptune_logger
 log_to_neptune =True
 api_token = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI2Yjg0ODM5Zi1lZDhlLTQ2MTItOGM1Zi1mMGI3OTEzMjg2MjAifQ=="

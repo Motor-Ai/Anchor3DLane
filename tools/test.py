@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument('--config', default= 'configs/zod/anchor3dlane.py', help='test config file path')
     parser.add_argument('--checkpoint', default = 'output/zod/anchor3dlane/latest.pth',help='checkpoint file')
     parser.add_argument(
-        '--work-dir',
+        '--work-dir', default='zodd_result',
         help=('if specified, the evaluation metric results will be dumped'
               'into the directory as json'))
     parser.add_argument(
@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument('--show', default=True, action='store_true', help='show results')
     parser.add_argument('--eval', action='store_true', help='show results', default=True)
     parser.add_argument(
-        '--show-dir', default = 'image_output_zod', help='directory where painted images will be saved')
+        '--show-dir', default = 'image_output_zod_fixed', help='directory where painted images will be saved')
     parser.add_argument(
         '--gpu-collect',
         action='store_true',
@@ -155,8 +155,10 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     rank, _ = get_dist_info()
+    cfg.data.test.data_list = 'inference.txt'
 
     dataset = build_dataset(cfg.data.test)
+    dataset.eval_file = 'data/zod_dataset/data_splits/inference.json'
     # The default loader config
     loader_cfg = dict(
         # cfg.gpus will be ignored if distributed
@@ -183,7 +185,6 @@ def main():
     # build the model and load checkpoint
     model = build_lanedetector(cfg.model)
     checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    print(model)
     
 
     # clean gpu memory when starting a new evaluation.

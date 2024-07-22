@@ -26,15 +26,16 @@ from mmseg.datasets import build_dataloader, build_dataset
 from mmseg.models import build_lanedetector
 from mmseg.utils import build_ddp, build_dp, get_device, setup_multi_processes, get_root_logger, collect_env
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a segmentor')
     parser.add_argument('--config', default= 'configs/zod/anchor3dlane.py', help='train config file path')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
-        '--load-from', help='the checkpoint file to load weights from')
+        '--load-from',  help='the checkpoint file to load weights from')
     parser.add_argument(
-        '--resume-from', help='the checkpoint file to resume from')
+        '--resume-from',  help='the checkpoint file to resume from')
     parser.add_argument(
         '--no-validate',
         action='store_true',

@@ -128,14 +128,14 @@ class ZODDataset(Dataset):
             self.gflatXnorm = 20
 
         self.num_types = 1
-        self.num_categories = 21
+        self.num_categories = 2
         if self.is_resample:
             self.sample_hz = 1
         else:
             self.sample_hz = 4
 
         self.img_w, self.img_h = self.h_org, self.w_org
-        self.max_lanes = 25
+        self.max_lanes = 10
         self.normalize = True
         self.to_tensor = ToTensor()
 
@@ -182,11 +182,10 @@ class ZODDataset(Dataset):
         with open(results['anno_file'], 'rb') as f:
             obj = pickle.load(f)
             results.update(obj)
-        if self.no_cls:
-            results['gt_3dlanes'][:, 1] = results['gt_3dlanes'][:, 1] > 0
         results['img_metas'] = {'ori_shape':results['ori_shape']}
         results['gt_project_matrix'] = projection_g2im_extrinsic(results['gt_camera_extrinsic'], results['gt_camera_intrinsic'])
         results['gt_homography_matrix'] = homography_g2im_extrinsic(results['gt_camera_extrinsic'], results['gt_camera_intrinsic'])
+
         results = self.pipeline(results)
         if 'original_anno' in obj:
             original_gt_3dlanes= obj['original_anno']
@@ -253,7 +252,7 @@ class ZODDataset(Dataset):
                 jsonFile.write('\n')
         print("save results to ", filename)
 
-    def eval(self, pred_filename, prob_th=0.02):
+    def eval(self, pred_filename, prob_th=0.2):
         evaluator = eval_zod.ZodEval(self)
         pred_lines = open(pred_filename).readlines()
         json_pred = [json.loads(line) for line in pred_lines]
